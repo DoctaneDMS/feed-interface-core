@@ -1,0 +1,88 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+}
+
+plugins {
+  id "org.jdrupes.mdoclet" version "1.0.5"
+}
+
+String propValue(String propName, String defValue) {
+    (project.hasProperty(propName) && project.getProperty(propName)) ? project.getProperty(propName) : defValue
+}
+
+version = propValue("ci_version","master");
+group = "com.softwareplumbers.oss"
+
+def SNAPSHOT_BUILDS = ["master", "PartAsOption"];
+
+if (SNAPSHOT_BUILDS.contains(version)) { version = version + "-SNAPSHOT" };
+
+apply plugin: 'java'
+apply plugin: 'maven'
+
+compileTestJava {
+    options.compilerArgs = [ "-Xlint:deprecation" ]
+}
+
+javadoc {
+    source = sourceSets.main.allJava
+    classpath = configurations.compile
+    options.overview = 'README.md'
+}
+
+task javadocJar(type: Jar) {
+    from javadoc
+    classifier = 'javadoc'
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+	classifier 'sources'
+	from sourceSets.main.allSource
+}
+
+task testsJar(type: Jar, dependsOn: classes) {
+    classifier 'tests'
+    from sourceSets.test.output
+}
+
+artifacts {
+    archives sourcesJar 
+    archives javadocJar
+    archives testsJar
+}
+
+repositories {
+	maven { url propValue("proxyMavenCentral", "https://repo.maven.apache.org/maven2/") }
+    maven { url 'https://nexus.softwareplumbers.com/repository/maven-oss' }
+    maven { url 'https://nexus.softwareplumbers.com/repository/maven-oss-snapshot' }
+}
+
+uploadArchives {
+  repositories {
+    mavenDeployer {
+      repository(url: "https://nexus.softwareplumbers.com/repository/maven-oss") {
+      	authentication(userName: propValue("mavenUploadUser",""), password: propValue("mavenUploadPassword",""))
+      }
+      snapshotRepository(url: "https://nexus.softwareplumbers.com/repository/maven-oss-snapshot") {
+      	authentication(userName: propValue("mavenUploadUser",""), password: propValue("mavenUploadPassword",""))
+      }
+    }
+  }
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+dependencies {
+    compile group: 'com.softwareplumbers.oss', name:'abstract-query-java', version:'0.3.7'
+    compile group: 'com.softwareplumbers.oss', name:'pipedstream', version:'0.0.1'
+    compile group: 'javax.json', name: 'javax.json-api', version: '1.0'
+    compile group: 'org.slf4j', name: 'slf4j-ext', version: '1.7.31-SNAPSHOT'
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.31-SNAPSHOT'
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+    testCompile group: 'org.hamcrest', name: 'hamcrest-library', version: '1.3'
+    testImplementation group: 'org.glassfish', name: 'javax.json', version: '1.0.2'
+    testImplementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
+}
