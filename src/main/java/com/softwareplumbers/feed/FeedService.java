@@ -16,7 +16,7 @@ import javax.json.JsonObject;
  * @author jonathan
  */
 public interface FeedService {    
-    void listen(FeedPath path, JsonObject clientData, Consumer<Message> messageConsumer);    
-    Message post(FeedPath path, Optional<JsonObject> header, InputStreamSupplier body);
+    void listen(FeedPath path, JsonObject clientData, Consumer<Stream<Message>> messageConsumer, int wait);    
+    Message post(FeedPath path, Optional<JsonObject> headers, InputStreamSupplier body);
     Stream<Message> sync(FeedPath path);
 }

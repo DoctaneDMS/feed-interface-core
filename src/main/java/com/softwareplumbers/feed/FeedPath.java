@@ -23,7 +23,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         return 0;
     };
     
-    protected abstract static class Element implements Comparable<Element> {
+    public abstract static class Element implements Comparable<Element> {
         
         public enum Type {
             FEED,
@@ -32,9 +32,9 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         
         public final Type type;
         
-        Optional<String> getName() { return Optional.empty(); }
-        Optional<String> getVersion()  { return Optional.empty(); }
-        Optional<String> getId()  { return Optional.empty(); }
+        public Optional<String> getName() { return Optional.empty(); }
+        public Optional<String> getVersion()  { return Optional.empty(); }
+        public Optional<String> getId()  { return Optional.empty(); }
         
         public Element(Type type) { this.type = type; }
         @Override
