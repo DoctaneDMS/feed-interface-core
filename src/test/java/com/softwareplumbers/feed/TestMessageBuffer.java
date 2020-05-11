@@ -9,21 +9,35 @@ import com.softwareplumbers.common.pipedstream.OutputStreamConsumer;
 import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import com.softwareplumbers.feed.impl.MessageFactory;
 import com.softwareplumbers.feed.impl.MessageImpl;
-import com.softwareplumbers.feed.impl.buffer.BucketPool;
+import com.softwareplumbers.feed.impl.buffer.BufferPool;
+import com.softwareplumbers.feed.impl.buffer.MessageClock;
+import com.softwareplumbers.feed.impl.buffer.MessageIterator;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.Queue;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.json.Json;
@@ -32,6 +46,9 @@ import static org.junit.Assert.assertEquals;
 import org.junit.Test;
 import static org.hamcrest.Matchers.*;
 import static org.hamcrest.MatcherAssert.assertThat;
+import org.hamcrest.Matchers;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  *
@@ -56,12 +73,14 @@ public class TestMessageBuffer {
         return builder.toString();
     }    
     
+    MessageClock clock = new MessageClock();
+    
     private Message generateMessage() {
         JsonObject testHeaders = Json.createObjectBuilder()
             .add("field1", randomText(1))
             .add("field2", randomText(1)).build();
         InputStream testData = new ByteArrayInputStream(randomText(10).getBytes());
-        Instant time = Instant.now();
+        Instant time = Instant.now(clock);
         FeedPath id = FeedPath.ROOT.addId(UUID.randomUUID().toString());
         try {
             return new MessageImpl(id, time, testHeaders, testData, false);
@@ -79,20 +98,39 @@ public class TestMessageBuffer {
         return pos/10;    
     }
     
-    private TreeMap<Instant,List<Message>> generateMessages(int count, int maxPause, Consumer<Message> messageConsumer) {
-        TreeMap<Instant,List<Message>> result = new TreeMap<>();
+    private void randomPause(int maxPause) {
+        int pause = (int)(Math.random() * maxPause);
+        if (pause > 0) {
+            try {
+                Thread.sleep(pause); // Make sure messages have different timestamps
+            } catch (InterruptedException e) {
+                // don't care
+            }
+        }
+    }
+    
+    private List<Message> generateMessages(int count, int maxPause, Consumer<Message> messageConsumer) {
+        List<Message> result = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             Message message = generateMessage();
-            result.computeIfAbsent(message.getTimestamp(), k->new LinkedList<Message>()).add(message);
+            result.add(message);
             messageConsumer.accept(message);
-            int pause = (int)(Math.random() * maxPause);
-            if (pause > 0) {
-                try {
-                    Thread.sleep(pause); // Make sure messages have different timestamps
-                } catch (InterruptedException e) {
-                    // don't care
+            randomPause(maxPause);
+        }
+        return result;
+    }
+    
+    private NavigableMap<FeedPath,Message> generateMessages(int threads, int count, int maxPause, Consumer<Message> messageConsumer) {
+        ConcurrentSkipListMap<FeedPath,Message> result = new ConcurrentSkipListMap<>();
+        for (int i = 0; i < threads; i++) {
+            new Thread(() -> {
+                for (int j = 0; j < count; j++) {
+                    Message message = generateMessage();
+                    result.put(message.getName(), message);
+                    messageConsumer.accept(message);
+                    randomPause(maxPause);
                 }
-            }
+            }).start();
         }
         return result;
     }
@@ -140,54 +178,42 @@ public class TestMessageBuffer {
     
     @Test
     public void testMessageRoundtrip() throws IOException {
-        BucketPool pool = new BucketPool(100000);
+        BufferPool pool = new BufferPool(100000);
         MessageBuffer testBuffer = pool.createBuffer(1024);
         Message message = generateMessage();
         testBuffer.addMessage(message);
-        Stream<Message> results = testBuffer.getMessagesAfter(message.getTimestamp().minusMillis(100));
-        Message after = results.findAny().orElseThrow(()->new RuntimeException("no message"));
+        MessageIterator results = testBuffer.getMessagesAfter(message.getTimestamp().minusMillis(100));
+        Message after = results.toStream().findAny().orElseThrow(()->new RuntimeException("no message"));
+        assertThat(after.getTimestamp(), greaterThanOrEqualTo(message.getTimestamp()));
         assertEquals(message, after);
     }
     
     @Test
-    public void testMultipleGet() throws IOException {
+    public void testMultipleGet() throws IOException, InterruptedException {
         int count = 80;
-        BucketPool pool = new BucketPool(100000);
+        BufferPool pool = new BufferPool(100000);
         MessageBuffer testBuffer = pool.createBuffer(1024);
-        TreeMap<Instant,List<Message>> messages = generateMessages(count, 2, message->testBuffer.addMessage(message));
-        Instant lastMessage = messages.lastKey();
-        for (Instant time : messages.keySet()) {
-            System.out.println("****Getting messages from " + time + " to " + lastMessage + " ****");
-            Map<Instant,List<Message>> result = testBuffer.getMessagesAfter(time).collect(Collectors.groupingBy(Message::getTimestamp, Collectors.toList()));
-            Map<Instant,List<Message>> shouldHaveReceived = messages.tailMap(time);
-            // First check that we have the same range of timestamps
-            assertEquals(shouldHaveReceived.keySet(), result.keySet());
-
-            int maxMessagesReceivedForInstant = result.values().stream().map(List::size).max(Comparator.naturalOrder()).orElse(0);
-            int maxMessagesSentForInstant = result.values().stream().map(List::size).max(Comparator.naturalOrder()).orElse(0);
-            
-            assertEquals(maxMessagesSentForInstant, maxMessagesReceivedForInstant);
-            
-            testBuffer.dumpBuffer();
-
-            for (Instant time2 : shouldHaveReceived.keySet()) {
-                Object[] sentNow = shouldHaveReceived.get(time2).toArray();
-                Object[] receivedNow = result.get(time2).toArray();
-                System.out.println("For " + time2 + " sent     " + Arrays.toString(sentNow));
-                System.out.println("For " + time2 + " received " + Arrays.toString(receivedNow));
-                assertThat(result.get(time2), containsInAnyOrder(sentNow));
-            }
-        }
+        Instant first = Instant.now();
+        Thread.sleep(100);
+        List<Message> messages = generateMessages(count, 2, message->testBuffer.addMessage(message));
+        testBuffer.dumpBuffer();
+        System.out.println("****Getting messages from " + first + " ****");
+        List<Message> result = testBuffer.getMessagesAfter(first).toStream().collect(Collectors.toList());
+        assertEquals(80, result.size());
+        for (int i = 0; i < count; i++)  {
+            first = result.get(i).getTimestamp();
+            System.out.println("****Getting messages from " + first + " ****");
+            long newGet = testBuffer.getMessagesAfter(first).toStream().count();
+            assertEquals(79-i, newGet);
+        }       
     }
     
     @Test 
     public void testParseFromStream() throws IOException {
         MessageFactory factory = new MessageFactory();
         Message message = factory.build(FeedPath.ROOT.addId("test"), new ByteArrayInputStream("{ \"a\" : \"one\" }plus some more unstructured data".getBytes()));
+        assertEquals("one", message.getHeaders().getString("a"));
         assertEquals(FeedPath.ROOT.addId("test"), message.getName());
-        assertEquals("one", message.header().getString("a"));
-        assertEquals("~test", message.header().getString("name"));
-        assertThat(message.header().getString("timestamp"), not(isEmptyString()));
         assertThat(message.getTimestamp(), lessThanOrEqualTo(Instant.now()));
         assertThat(asString(message.getData()), equalTo("plus some more unstructured data"));
         assertThat(asString(message.getData()), equalTo("plus some more unstructured data"));
@@ -198,9 +224,7 @@ public class TestMessageBuffer {
         MessageFactory factory = new MessageFactory();
         Message message = factory.buildTemporary(FeedPath.ROOT.addId("test"), new ByteArrayInputStream("{ \"a\" : \"one\" }plus some more unstructured data".getBytes()));
         assertEquals(FeedPath.ROOT.addId("test"), message.getName());
-        assertEquals("one", message.header().getString("a"));
-        assertEquals("~test", message.header().getString("name"));
-        assertThat(message.header().getString("timestamp"), not(isEmptyString()));
+        assertEquals("one", message.getHeaders().getString("a"));
         assertThat(message.getTimestamp(), lessThanOrEqualTo(Instant.now()));
         assertThat(asString(message.getData()), equalTo("plus some more unstructured data"));
         //Can only use stream once
@@ -208,11 +232,13 @@ public class TestMessageBuffer {
     }    
     
     @Test
-    public void testPoolGrowthAndDeallocation() throws IOException {
+    public void testPoolGrowthAndDeallocation() throws IOException, InterruptedException {
         int messageSize = getAverageMessageSize();
-        BucketPool pool = new BucketPool(messageSize * 20);
+        BufferPool pool = new BufferPool(messageSize * 20);
         MessageBuffer buffer = pool.createBuffer(messageSize * 5);
-        TreeMap<Instant, List<Message>> generated = generateMessages(40, 2, message->buffer.addMessage(message));
+        Instant first = Instant.now();
+        Thread.sleep(100);
+        List<Message> generated = generateMessages(40, 2, message->buffer.addMessage(message));
         // pool size should be greater than maximum
         assertThat(pool.getSize(), greaterThan(messageSize * 40L));
         buffer.dumpBuffer();
@@ -221,16 +247,107 @@ public class TestMessageBuffer {
         buffer.dumpBuffer();
         // pool size should be less than maximum
         assertThat(pool.getSize(), lessThanOrEqualTo(messageSize * 20L));
-        TreeMap<Instant,List<Message>> result = buffer.getMessagesAfter(generated.firstKey()).collect(Collectors.groupingBy(Message::getTimestamp, ()->new TreeMap<Instant,List<Message>>(), Collectors.toList()));
+        List<Message> result = buffer.getMessagesAfter(first).toStream().collect(Collectors.toList());
         // should have lost some messages
-        assertThat(result.values().stream().flatMap(List::stream).count(), lessThan(40L));
-        TreeSet<Instant> lost = new TreeSet<>(generated.keySet());
-        lost.removeAll(result.keySet());
-        // Check that the values we have lost are all less than or equal to values that remain
-        for (Instant timestamp : lost) {
-            Instant less = result.floorKey(timestamp);
-            assertThat(less, anyOf(nullValue(), equalTo(timestamp)));
-        }
-        
+        assertThat(result.size(), lessThan(40));
     }
+    
+    @Test
+    public void testMulthreadedAdd() throws IOException, InterruptedException {
+        BufferPool pool = new BufferPool(1000000);
+        MessageBuffer buffer = pool.createBuffer(2000);
+        Instant start = Instant.now();
+        Thread.sleep(100);
+        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, message->buffer.addMessage(message)); 
+        int receivedCount = 0;
+        while (receivedCount < 100) {
+            Thread.sleep(5);
+            try (MessageIterator messages = buffer.getMessagesAfter(start)) {
+                while (messages.hasNext()) {
+                    Message received = messages.next();
+                    receivedCount++;
+                    start = received.getTimestamp();
+                    assertThat(generated, hasEntry(received.getName(), received));
+                    generated.remove(received.getName());
+                }
+            }
+        }    
+    }
+    
+    private static void createReceiver(MessageBuffer buffer, Instant from, int count, Queue<Message> results, CountDownLatch completeCount) {
+        System.out.println("Creating receiver from " + from + " expecting " + count + " messages");
+        buffer.getMessagesAfter(from, messages->{
+            int remaining = count;
+            Message current = null;
+            while (messages.hasNext()) {
+                current = messages.next();
+                results.add(current);
+                remaining--;
+            }
+            if (remaining > 0) 
+                createReceiver(buffer, current.getTimestamp(), remaining, results, completeCount);
+            else 
+                completeCount.countDown();
+                
+        });
+    }
+    
+    private static List<BlockingQueue<Message>> createReceivers(CountDownLatch receivers, MessageBuffer buffer, Instant from, int count) {
+        List<BlockingQueue<Message>> results = new ArrayList<>();
+        long createCount = receivers.getCount();
+        for (long i = 0; i < createCount; i++) {
+            ArrayBlockingQueue<Message> queue = new ArrayBlockingQueue(100);
+            createReceiver(buffer,from,count,queue,receivers);
+            results.add(queue);           
+        }
+        return results;
+    }
+       
+    @Test
+    public void testCallback() throws InterruptedException {
+        BufferPool pool = new BufferPool(1000000);
+        MessageBuffer buffer = pool.createBuffer(2000);
+        Instant start = Instant.now();
+        Thread.sleep(100);
+        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, message->buffer.addMessage(message)); 
+        ArrayBlockingQueue<Message> results = new ArrayBlockingQueue(100);
+        CountDownLatch receiving = new CountDownLatch(1);
+        createReceiver(buffer, start, 100, results, receiving);
+        while (receiving.getCount() > 0) {
+            Message received = results.poll(10, TimeUnit.SECONDS);
+            System.out.println("RX:" + received);
+            //assertThat(received, not(nullValue()));
+            if (received == null) {
+                Thread.sleep(1000);
+                buffer.dumpBuffer();
+                System.out.println("Dropped:");
+                for (Message message : generated.values()) System.out.println(message);
+                fail("poll timed out");
+            } else {
+                assertThat(generated, hasEntry(received.getName(), received));
+                generated.remove(received.getName());
+            }
+        }
+        assertThat(generated.size(), equalTo(0));
+    }
+    
+    @Test
+    public void testCallbackMultipleReceivers() throws InterruptedException {
+        BufferPool pool = new BufferPool(1000000);
+        MessageBuffer buffer = pool.createBuffer(2000);
+        Instant start = Instant.now();
+        Thread.sleep(100);
+        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, message->buffer.addMessage(message)); 
+        CountDownLatch receiving = new CountDownLatch(3);
+        List<BlockingQueue<Message>> results = createReceivers(receiving, buffer, start, 100);
+        while (receiving.getCount() > 0) {
+            for (int i = 0; i < results.size(); i++) {
+                Message received = results.get(i).poll(10, TimeUnit.SECONDS);
+                System.out.println("RX channel(" + i + "):" + received);
+                if (received == null) fail("poll timed out");
+                assertThat(generated, hasEntry(received.getName(), received));
+            }
+        }
+    }
+
 }

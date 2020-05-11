@@ -6,22 +6,15 @@
 package com.softwareplumbers.feed.impl.buffer;
 
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
-import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.SequenceInputStream;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Optional;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.json.Json;
-import javax.json.JsonException;
-import javax.json.JsonObject;
-import javax.json.JsonWriter;
 
 /**
  *
@@ -29,10 +22,15 @@ import javax.json.JsonWriter;
  */
 class Bucket {
     
+    @FunctionalInterface
+    public interface OverflowHandler {
+        public Message recover(InputStream recovered, int currentSize) throws IOException;
+    }
+    
     private byte[] buffer;
     private int position;
     
-    private final TreeMap<Instant, List<Message>> timeIndex;
+    private final TreeMap<Instant, Message> timeIndex;
     
     private OutputStream out = new OutputStream() {
         @Override
@@ -83,54 +81,37 @@ class Bucket {
     }
     
 
-    public Message addMessage(FeedPath path, Instant time, JsonObject allHeaders, InputStream data) throws IOException, MessageOverflow, HeaderOverflow {
-        String id = path.part.getId().orElseThrow(() -> new IllegalArgumentException("Invalid feed path"));
+    public Message addMessage(Message message, OverflowHandler handler) throws IOException {
         int start = position;
-        try (final JsonWriter writer = Json.createWriter(out)) {
-            writer.write(allHeaders);
-        } catch (JsonException exp) {
-            throw new HeaderOverflow(position - start);
+        Message recovered = message.write(out, (e,is)->recoveryHandler(e, start, is, handler));
+        if (recovered != null) return recovered;
+        Message buffered = new BufferedMessageImpl(chunk(start, position));
+        timeIndex.put(message.getTimestamp(), buffered);
+        return buffered;
+    }
+    
+    public Message addMessage(Instant timestamp, InputStream recovered, OverflowHandler handler) throws IOException {
+        int start = position;
+        int count = recovered.read(buffer, start, buffer.length - start);
+        position+= count;
+        if (position < buffer.length) {
+            Message buffered = new BufferedMessageImpl(chunk(start, position));
+            timeIndex.put(timestamp, buffered);
+            return buffered;
+        } else {
+            return handler.recover(recovered, position-start);
         }
-        int count = data.read(buffer, position, buffer.length - position);
-        if (count < 0) {
-            throw new IOException("unexpected end of stream");
-        }
-        position += count;
-        if (position == buffer.length) {
-            throw new MessageOverflow(position - start, chunk(start, position));
-        }
-        Message message = new BufferedMessageImpl(chunk(start, position));
-        timeIndex.computeIfAbsent(time, (k) -> new LinkedList<>()).add(message);
-        return message;
     }
 
-    protected Message addMessage(FeedPath path, Instant time, InputStream overflow, InputStream data) throws IOException, MessageOverflow {
-        String id = path.part.getId().orElseThrow(() -> new IllegalArgumentException("Invalid feed path"));
-        int start = position;
-        int count = overflow.read(buffer, position, buffer.length - position);
-        if (count < 0) {
-            throw new IOException("unexpected end of stream");
-        }
-        position += count;
-        if (position == buffer.length) {
-            throw new IOException("insufficient buffer for overflow");
-        }
-        count = data.read(buffer, position, buffer.length - position);
-        if (count < 0) {
-            throw new IOException("unexpected end of stream");
-        }
-        position += count;
-        if (position == buffer.length) {
-            throw new MessageOverflow(position - start, chunk(start, position));
-        }
-        Message message = new BufferedMessageImpl(chunk(start, position));
-        timeIndex.computeIfAbsent(time, (k) -> new LinkedList<>()).add(message);
-        return message;
+    private Message recoveryHandler(IOException e, int start, InputStream recovered, OverflowHandler overflowHandler) throws IOException {
+        if (position < buffer.length) throw e;
+        recovered = recovered == null ? null : new SequenceInputStream(chunk(start, position).get(), recovered);
+        return overflowHandler.recover(recovered, position - start);
     }
 
     void dumpBucket() {
         for (Instant time : timeIndex.keySet()) {
-            System.out.println(time + ":" + timeIndex.get(time).stream().map(Message::toString).collect(Collectors.joining(",")));
+            System.out.println(time + ":" + timeIndex.get(time));
         }
     }
     
@@ -143,11 +124,11 @@ class Bucket {
     }
     
     Stream<Message> getMessages() {
-        return timeIndex.values().stream().flatMap(List::stream);
+        return timeIndex.values().stream();
     }
     
     Stream<Message> getMessagesAfter(Instant timestamp) {
-        return timeIndex.tailMap(timestamp).values().stream().flatMap(List::stream);
+        return timeIndex.tailMap(timestamp, false).values().stream();
     }
     
 }

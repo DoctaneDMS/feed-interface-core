@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @author jonathan
  */
-public class BucketPool {
+public class BufferPool {
     
     private class BucketRegistration {
         public final Bucket bucket;
@@ -31,7 +31,7 @@ public class BucketPool {
     private AtomicLong currentSize = new AtomicLong(0);
     private ConcurrentLinkedDeque<BucketRegistration> registry = new ConcurrentLinkedDeque<>();
     
-    public BucketPool(int maxSize) {
+    public BufferPool(int maxSize) {
         this.maxSize = maxSize;
     }
     

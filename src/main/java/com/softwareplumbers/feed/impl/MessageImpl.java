@@ -8,18 +8,18 @@ package com.softwareplumbers.feed.impl;
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.math.BigDecimal;
+import java.io.OutputStream;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Optional;
 import javax.json.Json;
+import javax.json.JsonException;
 import javax.json.JsonObject;
-import javax.json.JsonObjectBuilder;
 import javax.json.JsonReader;
 import javax.json.JsonWriter;
-import javax.json.stream.JsonParser;
 
 /**
  *
@@ -35,27 +35,45 @@ public class MessageImpl implements Message {
     private Instant timestamp;
     private InputStreamSupplier supplier;
     
-    public MessageImpl(FeedPath name, Instant timestamp, JsonObject headers, InputStream data, boolean temporary) throws IOException {
+    public MessageImpl(String id, FeedPath name, Instant timestamp, JsonObject headers, InputStreamSupplier supplier) {
         this.name = name;
-        this.id = name.part.getId().orElseThrow(()->new RuntimeException("no message id in path"));
+        this.id = id;
         this.timestamp = timestamp;
-        this.supplier = temporary ? ()->data : InputStreamSupplier.copy(()->data);
-        JsonObjectBuilder builder = Json.createObjectBuilder();
-        headers.forEach((key, value)->builder.add(key, value));
-        builder.add("name", name.toString());
-        builder.add("timestamp", timestamp.toString());
-        this.headers = builder.build();
+        this.supplier = supplier;
+        this.headers = headers;
     }
-
+    
+    public MessageImpl(FeedPath name, Instant timestamp, JsonObject headers, InputStream data, boolean temporary) throws IOException {
+        this(
+            name.part.getId().orElseThrow(()->new RuntimeException("no message id in name")),
+            name,
+            timestamp,
+            headers,
+            temporary ? ()->data : InputStreamSupplier.copy(()->data)
+        );
+    }
+    
     @Override
-    public JsonObject header() {
+    public JsonObject getHeaders() {
         return headers;
     }
+    
+    private JsonObject getAllHeaders() {
+        return Json.createObjectBuilder()
+            .add("name", name.toString())
+            .add("timestamp", timestamp.toString())
+            .add("headers", headers)
+            .build();
+    }
 
     @Override
-    public InputStream getData() throws IOException {
-        return supplier.get();
-    }
+    public InputStream getData() {
+        try {
+            return supplier.get();
+        }  catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    } 
 
     @Override
     public FeedPath getName() {
@@ -66,6 +84,11 @@ public class MessageImpl implements Message {
     public Instant getTimestamp() {
         return timestamp;
     }
+    
+    @Override
+    public Message setTimestamp(Instant timestamp) {
+        return new MessageImpl(id, name, timestamp, headers, supplier);
+    }
 
     @Override
     public String getId() {
@@ -73,16 +96,27 @@ public class MessageImpl implements Message {
     }
 
     @Override
-    public InputStream toStream() throws IOException {
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
+    public <T> T write(OutputStream os, ErrorHandler<T> errorHandler) throws IOException {
         try (JsonWriter writer = Json.createWriter(os)) {
-            writer.write(headers);
+            writer.write(getAllHeaders());
+        } catch (JsonException e) {
+            return errorHandler.recover((IOException)e.getCause(), null);                
         }
+    
         try (InputStream is = supplier.get()) {
             int read;
-            while ((read = is.read()) >= 0) os.write(read);
+            try {
+                while ((read = is.read()) >= 0) os.write(read);
+                return null;
+            } catch (IOException e) {
+                return errorHandler.recover(e, is);
+            }
         }
-        return new ByteArrayInputStream(os.toByteArray());
+    }
+    
+    @Override
+    public InputStream toStream() throws IOException {
+        return InputStreamSupplier.pipe(output->write(output));
     }
     
     @Override
@@ -97,6 +131,6 @@ public class MessageImpl implements Message {
     
     @Override
     public String toString() {
-        return "Message[" + getName() + "]";
+        return "MessageImpl[" + getAllHeaders() + "]";
     }
 }

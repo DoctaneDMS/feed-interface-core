@@ -5,16 +5,21 @@
  */
 package com.softwareplumbers.feed.impl.buffer;
 
-import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Clock;
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Stream;
+import java.util.function.Consumer;
 import javax.json.JsonObject;
 
 /**
@@ -24,12 +29,13 @@ import javax.json.JsonObject;
 public class MessageBuffer {
         
     private final TreeMap<Instant, Bucket> bucketCache = new TreeMap<>();
-    private final HashMap<String, Message> idIndex = new HashMap<>();
     private Bucket current;
-    private BucketPool pool;
+    private BufferPool pool;
+    private Clock clock = new MessageClock();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private CallbackRegistry callbacks = new CallbackRegistry();
     
-    MessageBuffer(BucketPool pool, int initSize) {
+    MessageBuffer(BufferPool pool, int initSize) {
         this.pool = pool;
         allocateNewBucket(initSize, Instant.now());
     }
@@ -49,62 +55,55 @@ public class MessageBuffer {
         }
     }
     
-    protected Message addMessage(FeedPath path, Instant time, InputStream overflow, InputStream data) throws IOException {
-        try {
-            return current.addMessage(path, time, overflow, data);
-        } catch (MessageOverflow movr) {
-            allocateNewBucket(calcNewSize(movr.getSize()), time); 
-            return addMessage(path, time, movr.getOverflow().get(), data);
-        }
-    }
-
-    
-    public  Message addMessage(FeedPath path, Instant time, JsonObject allHeaders, InputStream data) throws IOException {
-        try {
-            lock.writeLock().lock();
-            Message message = current.addMessage(path, time, allHeaders, data);
-            idIndex.put(path.part.getId().orElseThrow(() -> new RuntimeException("Invalid Id on path")), message);
-            return message;
-        } catch (HeaderOverflow hovr) {
-            allocateNewBucket(calcNewSize(hovr.getSize()), time);
-            return addMessage(path, time, allHeaders, data);
-        } catch (MessageOverflow movr) {
-            allocateNewBucket(calcNewSize(movr.getSize()), time); 
-            return addMessage(path, time, movr.getOverflow().get(), data);
-        } finally {
-            lock.writeLock().unlock();
-        }
+    protected Message handleOverflow(Message message, int size, InputStream recovered) throws IOException {
+        allocateNewBucket(calcNewSize(size), message.getTimestamp()); 
+        if (recovered == null)
+           return current.addMessage(message, (is, sz)->handleOverflow(message, sz, is));
+        else
+           return current.addMessage(message.getTimestamp(), recovered, (is, sz)->handleOverflow(message, sz, is));        
     }
     
     public Message addMessage(Message message) {
+        Message timestamped = message.setTimestamp(Instant.now(clock));
+        Message result;
         try {
-            return addMessage(message.getName(), message.getTimestamp(), message.header(), message.getData());
+            lock.writeLock().lock();
+            result = current.addMessage(timestamped, (is, sz)->handleOverflow(timestamped, sz, is));
         } catch (IOException e) {
             throw new RuntimeException(e);
+        } finally {
+            lock.writeLock().unlock();
         }
+        callbacks.callback(this::getMessagesAfter);
+        return result;
     }
-
     
-    public Stream<Message> getMessagesAfter(Instant timestamp) {
+    public MessageIterator getMessagesAfter(Instant timestamp) {
         try {
             lock.readLock().lock();
-            // search starts from the first bucket less than timestamp. This is
-            // because it is theoretically possible for a bucket to end with
-            // a message with the same timestamp as the first message in a new
-            // bucket.
-            Instant searchFrom = bucketCache.lowerKey(timestamp);
+            Instant searchFrom = bucketCache.floorKey(timestamp);
             if (searchFrom == null) searchFrom = timestamp;
-            return bucketCache
+            return new MessageIterator(bucketCache
                 .tailMap(searchFrom, true)
                 .values()
                 .stream()
                 .flatMap(bucket->bucket.getMessagesAfter(timestamp))
-                .onClose(()->lock.readLock().unlock());
+                .iterator(), ()->lock.readLock().unlock());
         } catch(RuntimeException e) {
-            lock.readLock().unlock();
             throw e;
+        } 
+    }
+    
+    public void getMessagesAfter(Instant timestamp, Consumer<MessageIterator> callback) {
+        try (MessageIterator found = getMessagesAfter(timestamp)) {
+            if (found.hasNext()) {
+                callback.accept(found);
+            } else {
+                callbacks.addCallback(timestamp, callback);
+            }
         }
     }
+
     
     public void dumpBuffer() {
         for (Instant bucketStart : bucketCache.keySet()) {
@@ -117,11 +116,6 @@ public class MessageBuffer {
         try {
             lock.writeLock().lock();
             Map<Instant, Bucket> toRemove = bucketCache.headMap(bucket.firstTimestamp(), true);
-
-            toRemove.values().stream().sequential()
-                .flatMap(bkt->bkt.getMessages())
-                .forEach(msg->idIndex.remove(msg.getId()));
-
             pool.releaseBuckets(toRemove.values());
             toRemove.clear();
         } finally {
