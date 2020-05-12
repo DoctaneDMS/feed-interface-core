@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import java.time.Instant;
 import java.util.function.Consumer;
 
@@ -13,7 +14,7 @@ import java.util.function.Consumer;
  * @author jonathan
  */
 public interface FeedService {    
-    void listen(FeedPath path, Instant after, Consumer<MessageIterator> messageConsumer);
-    MessageIterator sync(FeedPath path);
+    void listen(FeedPath path, Instant after, Consumer<MessageIterator> messageConsumer) throws InvalidPath;
+    MessageIterator sync(Instant from, FeedPath path) throws InvalidPath;
     Message post(Message message);
 }
