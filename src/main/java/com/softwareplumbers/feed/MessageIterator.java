@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.softwareplumbers.feed.impl.buffer;
+package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.Message;
 import java.io.Closeable;

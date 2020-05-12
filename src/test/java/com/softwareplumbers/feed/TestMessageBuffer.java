@@ -11,7 +11,6 @@ import com.softwareplumbers.feed.impl.MessageFactory;
 import com.softwareplumbers.feed.impl.MessageImpl;
 import com.softwareplumbers.feed.impl.buffer.BufferPool;
 import com.softwareplumbers.feed.impl.buffer.MessageClock;
-import com.softwareplumbers.feed.impl.buffer.MessageIterator;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

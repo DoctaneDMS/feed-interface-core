@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed.impl.buffer;
 
+import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.Message;
 import java.io.IOException;
 import java.io.InputStream;

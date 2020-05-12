@@ -5,18 +5,15 @@
  */
 package com.softwareplumbers.feed;
 
-import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
-import java.util.Optional;
+import java.time.Instant;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
-import javax.json.JsonObject;
 
 /**
  *
  * @author jonathan
  */
 public interface FeedService {    
-    void listen(FeedPath path, JsonObject clientData, Consumer<Stream<Message>> messageConsumer, int wait);    
-    Message post(FeedPath path, Optional<JsonObject> headers, InputStreamSupplier body);
-    Stream<Message> sync(FeedPath path);
+    void listen(FeedPath path, Instant after, Consumer<MessageIterator> messageConsumer);
+    MessageIterator sync(FeedPath path);
+    Message post(Message message);
 }
