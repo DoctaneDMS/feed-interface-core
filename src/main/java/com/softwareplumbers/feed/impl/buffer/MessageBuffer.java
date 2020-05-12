@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
@@ -70,6 +71,15 @@ public class MessageBuffer {
         }
         callbacks.callback(this::getMessagesAfter);
         return result;
+    }
+    
+    public Optional<Instant> firstTimestamp() {
+        lock.readLock().lock();
+        try {
+            return bucketCache.isEmpty() ? Optional.empty() : Optional.of(bucketCache.firstEntry().getValue().firstTimestamp());
+        } finally {
+            lock.readLock().unlock();
+        }
     }
     
     public MessageIterator getMessagesAfter(Instant timestamp) {
