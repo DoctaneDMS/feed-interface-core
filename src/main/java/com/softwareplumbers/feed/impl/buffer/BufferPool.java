@@ -31,7 +31,7 @@ public class BufferPool {
     private AtomicLong currentSize = new AtomicLong(0);
     private ConcurrentLinkedDeque<BucketRegistration> registry = new ConcurrentLinkedDeque<>();
     
-    public BufferPool(int maxSize) {
+    public BufferPool(long maxSize) {
         this.maxSize = maxSize;
     }
     
