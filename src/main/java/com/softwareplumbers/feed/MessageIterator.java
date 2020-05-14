@@ -107,6 +107,10 @@ public abstract class MessageIterator implements Closeable, Iterator<Message> {
         return new Delegator(messages, closeHandler);
     }
     
+    public static MessageIterator of(Stream<Message> messages) {
+        return new Delegator(messages.iterator(), ()->messages.close());
+    }
+    
     public static MessageIterator of(Message message) {
         return new Singleton(message);
     }
