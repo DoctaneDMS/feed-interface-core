@@ -207,6 +207,15 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         return join("/");
     }
     
+    public FeedPath afterFeedId() {
+        if (isEmpty()) return ROOT;
+        if (part.type == Element.Type.FEEDID) {
+            return ROOT;
+        } else {
+            return parent.afterFeedId().add(part);
+        }
+    }
+    
     public static FeedPath valueOf(String path) {
         FeedPath result = ROOT;
         Iterable<String> elements = split(path, "/")::iterator;
