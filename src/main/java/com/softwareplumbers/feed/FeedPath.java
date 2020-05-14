@@ -26,6 +26,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
     public abstract static class Element implements Comparable<Element> {
         
         public enum Type {
+            FEEDID,
             FEED,
             MESSAGEID
         }
@@ -86,10 +87,10 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         }
     }
     
-    private static class MessageId extends Element {
+    private static class Id extends Element {
         public final String id;
         
-        public MessageId(String id) {
+        public Id(Type type, String id) {
             super(Type.MESSAGEID);
             this.id = id;
         }
@@ -101,7 +102,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         public int compareTo(Element other) {
             int result = type.compareTo(other.type);
             if (result == 0) {
-                MessageId otherId = (MessageId)other;
+                Id otherId = (Id)other;
                 result = id.compareTo(otherId.id);
             }
             return result;
@@ -111,16 +112,36 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         public String toString() {
             return "~" + escape(id);
         }
-
-        public static Optional<MessageId> valueOf(String item) {
-            if (item.startsWith("~") && !item.startsWith("~~")) 
-                return Optional.of(new MessageId(unescape(item.substring(1))));
-            return Optional.empty();
-        }
         
         @Override
         public int hashCode() { return type.hashCode() ^ id.hashCode(); }
         
+    }
+    
+    private static class MessageId extends Id {
+    
+        public MessageId(String id) {
+            super(Element.Type.MESSAGEID, id);
+        }
+    
+        public static Optional<Id> valueOf(String item) {
+            if (item.startsWith("~") && !item.startsWith("~~")) 
+                return Optional.of(new MessageId(unescape(item.substring(1))));
+            return Optional.empty();
+        }
+    }
+
+    private static class FeedId extends Id {
+    
+        public FeedId(String id) {
+            super(Element.Type.FEEDID, id);
+        }
+    
+        public static Optional<Id> valueOf(String item) {
+            if (item.startsWith("~") && !item.startsWith("~~")) 
+                return Optional.of(new MessageId(unescape(item.substring(1))));
+            return Optional.empty();
+        }
     }
     
     public static final FeedPath ROOT = new FeedPath(null, null) {
@@ -154,7 +175,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         if (part.type == Element.Type.FEED) {
             return parent.add(new Feed(part.getName().get(), Optional.of(version)));
         } else {
-            throw new RuntimeException("Can't set version for a message id");
+            throw new RuntimeException("Can't set version for an id");
         }
     }
     
@@ -191,9 +212,9 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         Iterable<String> elements = split(path, "/")::iterator;
         for (String pathElement : elements) {
             if (pathElement.length() == 0) continue;  
-            Optional<MessageId> messageId = MessageId.valueOf(pathElement);
-            if (messageId.isPresent()) {
-                result = result.add(messageId.get());
+            Optional<Id> id = result == ROOT ? FeedId.valueOf(pathElement) : MessageId.valueOf(pathElement);
+            if (id.isPresent()) {
+                result = result.add(id.get());
             } else {
                 result = result.add(Feed.valueOf(pathElement)
                     .orElseThrow(()->new RuntimeException("cannot parse: " + pathElement))
