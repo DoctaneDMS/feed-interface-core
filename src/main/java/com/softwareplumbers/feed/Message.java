@@ -10,8 +10,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.Instant;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.function.Consumer;
 import javax.json.JsonObject;
 
 /**

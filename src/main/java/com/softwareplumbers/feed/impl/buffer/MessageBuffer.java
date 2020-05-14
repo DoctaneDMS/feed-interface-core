@@ -58,6 +58,19 @@ public class MessageBuffer {
            return current.addMessage(message.getTimestamp(), recovered, (is, sz)->handleOverflow(message, sz, is));        
     }
     
+    public Instant now() {
+        return clock.instant();
+    }
+    
+    public boolean isEmpty() {
+        try {
+            lock.readLock().lock();
+            return current.isEmpty() && bucketCache.size() == 1;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+    
     public Message addMessage(Message message) {
         Message timestamped = message.setTimestamp(Instant.now(clock));
         Message result;
