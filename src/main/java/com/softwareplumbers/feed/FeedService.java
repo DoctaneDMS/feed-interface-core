@@ -15,6 +15,6 @@ import java.util.function.Consumer;
  */
 public interface FeedService {    
     void listen(FeedPath path, Instant after, Consumer<MessageIterator> messageConsumer) throws InvalidPath;
-    MessageIterator sync(Instant from, FeedPath path) throws InvalidPath;
+    MessageIterator sync(FeedPath path, Instant from) throws InvalidPath;
     Message post(Message message);
 }
