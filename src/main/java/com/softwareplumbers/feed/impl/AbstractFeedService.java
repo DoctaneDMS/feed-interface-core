@@ -68,8 +68,7 @@ public abstract class AbstractFeedService implements FeedService {
         MessageBuffer buffer = getBuffer(path);
         synchronized(buffer) {
             if (buffer.isEmpty()) {
-                Feed feed = createBackEndFeed(path);
-                syncToBackEnd(feed, buffer.now(), buffer);
+                startBackEndListener(path, buffer.now());
             } 
         }
         return buffer.addMessage(message);
@@ -82,10 +81,6 @@ public abstract class AbstractFeedService implements FeedService {
         }
     }
     
-    protected abstract MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to);
-
-    protected abstract void syncToBackEnd(Feed path, Instant from, MessageBuffer buffer);
-    
-    protected abstract Feed createBackEndFeed(FeedPath path) throws InvalidPath;
-    
+    protected abstract MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to);   
+    protected abstract void startBackEndListener(FeedPath path, Instant from);
 }

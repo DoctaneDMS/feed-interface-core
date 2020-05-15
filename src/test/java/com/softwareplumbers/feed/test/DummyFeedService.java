@@ -32,12 +32,6 @@ public class DummyFeedService extends AbstractFeedService {
     }
 
     @Override
-    protected void syncToBackEnd(Feed path, Instant from, MessageBuffer buffer) {
-    }
-
-    @Override
-    protected Feed createBackEndFeed(FeedPath path) throws FeedExceptions.InvalidPath {
-        return new FeedImpl(UUID.randomUUID().toString(), path);
-    }
-    
+    protected void startBackEndListener(FeedPath path, Instant from) {
+    }    
 }
