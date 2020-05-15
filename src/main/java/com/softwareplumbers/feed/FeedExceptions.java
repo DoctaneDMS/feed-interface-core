@@ -22,6 +22,13 @@ public class FeedExceptions {
         }
     }
     
+    public static class BaseRuntimeException extends RuntimeException {
+        public BaseRuntimeException(BaseException e) {
+            super(e);
+        }
+        
+    }
+    
     /** Throw if a path is invalid
      * 
      */

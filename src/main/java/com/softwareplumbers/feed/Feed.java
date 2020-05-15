@@ -5,6 +5,9 @@
  */
 package com.softwareplumbers.feed;
 
+import java.time.Instant;
+import java.util.function.Consumer;
+
 /** Simple feed interface.
  *
  * @author jonathan
@@ -22,4 +25,12 @@ public interface Feed {
      * @return the feed id.
      */
     String getId();
+    
+    default void listen(FeedService service, Instant from, Consumer<MessageIterator> callback) {
+        try {
+            service.listen(getName(), from, callback);
+        } catch (FeedExceptions.InvalidPath e) {
+            throw new FeedExceptions.BaseRuntimeException(e);
+        }
+    }
 }
