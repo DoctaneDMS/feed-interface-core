@@ -6,6 +6,8 @@
 package com.softwareplumbers.feed;
 
 import static com.softwareplumbers.feed.test.TestUtils.generateMessages;
+import static com.softwareplumbers.feed.test.TestUtils.getFeeds;
+import static com.softwareplumbers.feed.test.TestUtils.randomFeedPath;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -20,9 +22,9 @@ import org.junit.Test;
 public class TestMessageIterator {
     @Test
     public void testSequence() {
-        Map<FeedPath,Message> messages1 = generateMessages(3,2,m->{});
-        Map<FeedPath,Message> messages2 = generateMessages(4,2,m->{});
-        Map<FeedPath,Message> messages3 = generateMessages(5,2,m->{});
+        Map<FeedPath,Message> messages1 = generateMessages(3,2,randomFeedPath(),m->{});
+        Map<FeedPath,Message> messages2 = generateMessages(4,2,randomFeedPath(),m->{});
+        Map<FeedPath,Message> messages3 = generateMessages(5,2,randomFeedPath(),m->{});
         
         MessageIterator seq = MessageIterator.of(
             MessageIterator.of(messages1.values().iterator(), ()->{}),

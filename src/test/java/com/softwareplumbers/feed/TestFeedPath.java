@@ -5,8 +5,9 @@
  */
 package com.softwareplumbers.feed;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
 import org.junit.Test;
-import static org.junit.Assert.assertEquals;
 
 /**
  *
@@ -17,7 +18,6 @@ public class TestFeedPath {
     @Test
     public void testSimplePath() {
         FeedPath path = FeedPath.ROOT.add("abc").add("def").addId("123");
-        assertEquals(path, FeedPath.valueOf(path.toString()));
+        assertThat(FeedPath.valueOf(path.toString()), equalTo(path));
     }
-    
 }

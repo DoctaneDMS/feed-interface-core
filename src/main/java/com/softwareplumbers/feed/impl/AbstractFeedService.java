@@ -81,6 +81,6 @@ public abstract class AbstractFeedService implements FeedService {
         }
     }
     
-    protected abstract MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to);   
-    protected abstract void startBackEndListener(FeedPath path, Instant from);
+    protected abstract MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to) throws InvalidPath;   
+    protected abstract void startBackEndListener(FeedPath path, Instant from) throws InvalidPath;
 }
