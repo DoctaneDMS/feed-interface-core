@@ -168,7 +168,10 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
     }
     
     public FeedPath addId(String id) {
-        return add(new MessageId(id));
+        if (isEmpty()) 
+            return add(new FeedId(id));
+        else
+            return add(new MessageId(id));
     }
     
     public FeedPath setVersion(String version) {
@@ -214,6 +217,15 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         } else {
             return parent.afterFeedId().add(part);
         }
+    }
+    
+    public FeedPath beforeMessageId() {
+        if (isEmpty()) return ROOT;
+        if (part.type == Element.Type.MESSAGEID) {
+            return parent;
+        } else {
+            return parent.beforeMessageId();
+        }        
     }
     
     public static FeedPath valueOf(String path) {

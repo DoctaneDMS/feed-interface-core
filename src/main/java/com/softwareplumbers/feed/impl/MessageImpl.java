@@ -8,10 +8,12 @@ package com.softwareplumbers.feed.impl;
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.SequenceInputStream;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Optional;
@@ -104,12 +106,13 @@ public class MessageImpl implements Message {
         }
     
         try (InputStream is = supplier.get()) {
-            int read;
-            try {
-                while ((read = is.read()) >= 0) os.write(read);
+            int read = 0;
+            byte[] buffer = new byte[8];
+            try {               
+                while ((read = is.read(buffer, 0, 8)) >= 0) os.write(buffer, 0, read);
                 return null;
             } catch (IOException e) {
-                return errorHandler.recover(e, is);
+                return errorHandler.recover(e, new SequenceInputStream(new ByteArrayInputStream(buffer, 0, read), is));
             }
         }
     }

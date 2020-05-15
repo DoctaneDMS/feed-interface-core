@@ -32,13 +32,27 @@ class Bucket {
     
     private final TreeMap<Instant, Message> timeIndex;
     
+    private class BufferOverflow extends IOException {
+        
+    }
+    
     private OutputStream out = new OutputStream() {
         @Override
-        public void write(int b) throws IOException {
+        public void write(int b) throws BufferOverflow {
             if (position < buffer.length) {
                 buffer[position++] = (byte) b;
             } else {
-                throw new IOException("Buffer overflow");
+                throw new BufferOverflow();
+            }
+        }
+        
+        @Override
+        public void write(byte[] input, int pos, int length) throws BufferOverflow {
+            if (position + length <  buffer.length) {
+                System.arraycopy(input, pos, buffer, position, length);
+                position += length;
+            } else {
+                throw new BufferOverflow();
             }
         }
     };
@@ -92,9 +106,11 @@ class Bucket {
     
     public Message addMessage(Instant timestamp, InputStream recovered, OverflowHandler handler) throws IOException {
         int start = position;
-        int count = recovered.read(buffer, start, buffer.length - start);
-        position+= count;
-        if (position < buffer.length) {
+        int count;
+        while ((count = recovered.read(buffer, position, buffer.length - position)) >= 0 && position < buffer.length) {
+            position += count;
+        }
+        if (count < 0) {
             Message buffered = new BufferedMessageImpl(chunk(start, position));
             timeIndex.put(timestamp, buffered);
             return buffered;
@@ -104,9 +120,12 @@ class Bucket {
     }
 
     private Message recoveryHandler(IOException e, int start, InputStream recovered, OverflowHandler overflowHandler) throws IOException {
-        if (position < buffer.length) throw e;
-        recovered = recovered == null ? null : new SequenceInputStream(chunk(start, position).get(), recovered);
-        return overflowHandler.recover(recovered, position - start);
+        if (e instanceof BufferOverflow) {
+            recovered = recovered == null ? null : new SequenceInputStream(chunk(start, position).get(), recovered);
+            return overflowHandler.recover(recovered, position - start);
+        } else {
+            throw e;
+        }
     }
 
     void dumpBucket() {

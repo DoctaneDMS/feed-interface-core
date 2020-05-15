@@ -122,7 +122,7 @@ public class BufferedMessageImpl implements Message {
     
     @Override
     public String toString() {
-        byte[] truncatedHeaders = new byte[128];
+        byte[] truncatedHeaders = new byte[64];
         try (InputStream is = data.get()) {
             is.read(truncatedHeaders);
             return "BufferedMessage[ " + new String(truncatedHeaders) + "... ]";

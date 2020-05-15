@@ -16,13 +16,17 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
+import org.slf4j.ext.XLogger;
+import org.slf4j.ext.XLoggerFactory;
 
 /**
  *
  * @author jonathan
  */
 public class MessageBuffer {
-        
+    
+    private static XLogger LOG = XLoggerFactory.getXLogger(BufferPool.class);
+    
     private final TreeMap<Instant, Bucket> bucketCache = new TreeMap<>();
     private Bucket current;
     private BufferPool pool;
@@ -51,11 +55,12 @@ public class MessageBuffer {
     }
     
     protected Message handleOverflow(Message message, int size, InputStream recovered) throws IOException {
+        LOG.entry(message, size, "<input stream>");
         allocateNewBucket(calcNewSize(size), message.getTimestamp()); 
         if (recovered == null)
-           return current.addMessage(message, (is, sz)->handleOverflow(message, sz, is));
+           return LOG.exit(current.addMessage(message, (is, sz)->handleOverflow(message, sz, is)));
         else
-           return current.addMessage(message.getTimestamp(), recovered, (is, sz)->handleOverflow(message, sz, is));        
+           return LOG.exit(current.addMessage(message.getTimestamp(), recovered, (is, sz)->handleOverflow(message, sz, is)));        
     }
     
     public Instant now() {
@@ -72,10 +77,11 @@ public class MessageBuffer {
     }
     
     public Message addMessage(Message message) {
-        Message timestamped = message.setTimestamp(Instant.now(clock));
+        LOG.entry(message);
         Message result;
         try {
             lock.writeLock().lock();
+            Message timestamped = message.setTimestamp(Instant.now(clock));
             result = current.addMessage(timestamped, (is, sz)->handleOverflow(timestamped, sz, is));
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -83,7 +89,7 @@ public class MessageBuffer {
             lock.writeLock().unlock();
         }
         callbacks.callback(this::getMessagesAfter);
-        return result;
+        return LOG.exit(result);
     }
     
     public Optional<Instant> firstTimestamp() {
@@ -96,29 +102,33 @@ public class MessageBuffer {
     }
     
     public MessageIterator getMessagesAfter(Instant timestamp) {
-        try {
-            lock.readLock().lock();
-            Instant searchFrom = bucketCache.floorKey(timestamp);
-            if (searchFrom == null) searchFrom = timestamp;
-            return MessageIterator.of(bucketCache
+        LOG.entry(timestamp);
+        lock.readLock().lock();
+        Instant searchFrom = bucketCache.floorKey(timestamp);
+        if (searchFrom == null) searchFrom = timestamp;
+        // NOTE read lock held until iterator is closed
+        LOG.debug("returning messages from buckets after {}", searchFrom);
+        return LOG.exit(
+            MessageIterator.of(bucketCache
                 .tailMap(searchFrom, true)
                 .values()
                 .stream()
                 .flatMap(bucket->bucket.getMessagesAfter(timestamp))
-                .iterator(), ()->lock.readLock().unlock());
-        } catch(RuntimeException e) {
-            throw e;
-        } 
+                .iterator(), ()->lock.readLock().unlock())
+        );
     }
     
     public void getMessagesAfter(Instant timestamp, Consumer<MessageIterator> callback) {
+        LOG.entry(timestamp, callback);
         try (MessageIterator found = getMessagesAfter(timestamp)) {
             if (found.hasNext()) {
+                LOG.debug("immediately returning messages");
                 callback.accept(found);
             } else {
                 callbacks.addCallback(timestamp, callback);
             }
         }
+        LOG.exit();
     }
 
     
@@ -130,6 +140,7 @@ public class MessageBuffer {
     }
 
     void deallocateBucket(Bucket bucket) {
+        LOG.entry(bucket);
         try {
             lock.writeLock().lock();
             Map<Instant, Bucket> toRemove = bucketCache.headMap(bucket.firstTimestamp(), true);
@@ -138,5 +149,6 @@ public class MessageBuffer {
         } finally {
             lock.writeLock().unlock();
         }
+        LOG.exit();
     }    
 }

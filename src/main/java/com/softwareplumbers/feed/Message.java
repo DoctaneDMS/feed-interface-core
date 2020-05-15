@@ -45,6 +45,9 @@ public interface Message {
     public default String getId() {
         return getName().part.getId().orElseThrow(()->new RuntimeException("Invalid message id"));
     }
+    public default FeedPath getFeedName() {
+        return getName().beforeMessageId();
+    }
     public InputStream toStream() throws IOException;
     
     /** Write to output stream with optional error callback.

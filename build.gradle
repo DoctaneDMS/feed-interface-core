@@ -6,6 +6,7 @@ buildscript {
 
 plugins {
   id "org.jdrupes.mdoclet" version "1.0.5"
+  id 'org.springframework.boot' version '1.5.22.RELEASE' apply false  
 }
 
 String propValue(String propName, String defValue) {
@@ -21,6 +22,7 @@ if (SNAPSHOT_BUILDS.contains(version)) { version = version + "-SNAPSHOT" };
 
 apply plugin: 'java'
 apply plugin: 'maven'
+apply plugin: 'io.spring.dependency-management'
 
 compileTestJava {
     options.compilerArgs = [ "-Xlint:deprecation" ]
@@ -75,6 +77,12 @@ uploadArchives {
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
+dependencyManagement {      
+	imports {
+		mavenBom 'org.springframework.boot:spring-boot-dependencies:1.5.22.RELEASE'
+	}
+}
+
 dependencies {
     compile group: 'com.softwareplumbers.oss', name:'abstract-query-java', version:'0.3.7'
     compile group: 'com.softwareplumbers.oss', name:'pipedstream', version:'0.0.2'
@@ -85,4 +93,7 @@ dependencies {
     testCompile group: 'org.hamcrest', name: 'hamcrest-library', version: '1.3'
     testImplementation group: 'org.glassfish', name: 'javax.json', version: '1.1.4'
     testImplementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
+    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test'
+    testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-logging'
+    
 }

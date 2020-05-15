@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="Console"
+        class="ch.qos.logback.core.ConsoleAppender">
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <Pattern>
+               %-5level %X{user} [%t] %C{1.}/%M: %msg%n%throwable
+            </Pattern>
+        </layout>
+    </appender>
+    <root level="INFO">
+        <appender-ref ref="Console" />
+    </root>
+    <logger name="com.softwareplumbers.feed" level="TRACE"/>
+    <logger name="com.softwareplumbers.feed.impl" level="TRACE"/>
+    <logger name="com.softwareplumbers.feed.impl.buffer" level="TRACE"/>
+</configuration>

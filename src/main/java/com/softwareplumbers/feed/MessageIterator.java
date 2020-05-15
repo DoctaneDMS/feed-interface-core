@@ -5,10 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
-import com.softwareplumbers.feed.Message;
 import java.io.Closeable;
-import java.io.IOException;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -88,6 +85,7 @@ public abstract class MessageIterator implements Closeable, Iterator<Message> {
         
         public Singleton(Message message) {
             super(()->{});
+            this.message = message;
         }
         
         @Override
@@ -103,6 +101,35 @@ public abstract class MessageIterator implements Closeable, Iterator<Message> {
         }  
     }
     
+    private static class Sequence extends MessageIterator {
+        private final MessageIterator[] seq;
+        private int pos;
+        
+        private final void skip() {
+            while (pos < seq.length && !seq[pos].hasNext()) pos++;            
+        }
+        
+        public Sequence(MessageIterator... seq) {
+            super(()->Stream.of(seq).forEach(MessageIterator::close));
+            this.seq = seq;
+            this.pos = 0;
+            skip();
+        }
+        
+        @Override
+        public boolean hasNext() {
+            return pos < seq.length;
+        }
+
+        @Override
+        public Message next() {
+            Message next = hasNext() ? seq[pos].next() : null;
+            skip();
+            return next;
+
+        }       
+    }
+    
     public static MessageIterator of(Iterator<Message> messages, Runnable closeHandler) {
         return new Delegator(messages, closeHandler);
     }
@@ -113,6 +140,10 @@ public abstract class MessageIterator implements Closeable, Iterator<Message> {
     
     public static MessageIterator of(Message message) {
         return new Singleton(message);
+    }
+    
+    public static MessageIterator of(MessageIterator... iterators) {
+        return new Sequence(iterators);
     }
         
 }

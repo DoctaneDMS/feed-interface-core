@@ -5,49 +5,35 @@
  */
 package com.softwareplumbers.feed;
 
-import com.softwareplumbers.common.pipedstream.OutputStreamConsumer;
 import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import com.softwareplumbers.feed.impl.MessageFactory;
 import com.softwareplumbers.feed.impl.MessageImpl;
 import com.softwareplumbers.feed.impl.buffer.BufferPool;
-import com.softwareplumbers.feed.impl.buffer.MessageClock;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Queue;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import javax.json.Json;
 import javax.json.JsonObject;
 import static org.junit.Assert.assertEquals;
 import org.junit.Test;
 import static org.hamcrest.Matchers.*;
-import static org.hamcrest.MatcherAssert.assertThat;
-import org.hamcrest.Matchers;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import static com.softwareplumbers.feed.test.TestUtils.*;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  *
@@ -55,83 +41,33 @@ import static org.junit.Assert.fail;
  */
 public class TestMessageBuffer {
     
-    private String asString(InputStream is) throws IOException {
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        OutputStreamConsumer.of(()->is).consume(stream);
-        return stream.toString();
-    }
-
-    private final String[] WORDS = new String[] { "sphagetti", "idle", "loves", "jane", "dog", "hair", "tantric", "slightly", "worm", "likely", "moves", "gets", "fast" };
-    
-    private String randomText(int count) {
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < count; i++) {
-            builder.append(WORDS[(int)(Math.random() * WORDS.length)]);
-            builder.append(" ");
-        }
-        return builder.toString();
-    }    
-    
-    MessageClock clock = new MessageClock();
-    
-    private Message generateMessage() {
-        JsonObject testHeaders = Json.createObjectBuilder()
-            .add("field1", randomText(1))
-            .add("field2", randomText(1)).build();
-        InputStream testData = new ByteArrayInputStream(randomText(10).getBytes());
-        Instant time = Instant.now(clock);
-        FeedPath id = FeedPath.ROOT.addId(UUID.randomUUID().toString());
-        try {
-            return new MessageImpl(id, time, testHeaders, testData, false);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-    
-    private int getAverageMessageSize() throws IOException {
-        byte[] buffer = new byte[10000];
-        int pos = 0;
-        for (int i = 0; i < 10; i ++) {
-            pos += generateMessage().toStream().read(buffer, pos, buffer.length - pos);
-        }
-        return pos/10;    
-    }
-    
-    private void randomPause(int maxPause) {
-        int pause = (int)(Math.random() * maxPause);
-        if (pause > 0) {
-            try {
-                Thread.sleep(pause); // Make sure messages have different timestamps
-            } catch (InterruptedException e) {
-                // don't care
+    public static void createReceiver(MessageBuffer buffer, Instant from, int count, Queue<Message> results, CountDownLatch completeCount) {
+        System.out.println("Creating receiver from " + from + " expecting " + count + " messages");
+        buffer.getMessagesAfter(from, messages->{
+            int remaining = count;
+            Message current = null;
+            while (messages.hasNext()) {
+                current = messages.next();
+                results.add(current);
+                remaining--;
             }
-        }
+            if (remaining > 0) 
+                createReceiver(buffer, current == null ? from : current.getTimestamp(), remaining, results, completeCount);
+            else 
+                completeCount.countDown();
+                
+        });
     }
     
-    private List<Message> generateMessages(int count, int maxPause, Consumer<Message> messageConsumer) {
-        List<Message> result = new ArrayList<>(count);
-        for (int i = 0; i < count; i++) {
-            Message message = generateMessage();
-            result.add(message);
-            messageConsumer.accept(message);
-            randomPause(maxPause);
+    public static List<BlockingQueue<Message>> createReceivers(CountDownLatch receivers, MessageBuffer buffer, Instant from, int count) {
+        List<BlockingQueue<Message>> results = new ArrayList<>();
+        long createCount = receivers.getCount();
+        for (long i = 0; i < createCount; i++) {
+            ArrayBlockingQueue<Message> queue = new ArrayBlockingQueue(100);
+            createReceiver(buffer,from,count,queue,receivers);
+            results.add(queue);           
         }
-        return result;
-    }
-    
-    private NavigableMap<FeedPath,Message> generateMessages(int threads, int count, int maxPause, Consumer<Message> messageConsumer) {
-        ConcurrentSkipListMap<FeedPath,Message> result = new ConcurrentSkipListMap<>();
-        for (int i = 0; i < threads; i++) {
-            new Thread(() -> {
-                for (int j = 0; j < count; j++) {
-                    Message message = generateMessage();
-                    result.put(message.getName(), message);
-                    messageConsumer.accept(message);
-                    randomPause(maxPause);
-                }
-            }).start();
-        }
-        return result;
+        return results;
     }
     
     @Test
@@ -185,6 +121,7 @@ public class TestMessageBuffer {
         Message after = results.toStream().findAny().orElseThrow(()->new RuntimeException("no message"));
         assertThat(after.getTimestamp(), greaterThanOrEqualTo(message.getTimestamp()));
         assertEquals(message, after);
+        assertThat(asString(after.getData()), equalTo(asString(message.getData())));
     }
     
     @Test
@@ -194,11 +131,20 @@ public class TestMessageBuffer {
         MessageBuffer testBuffer = pool.createBuffer(1024);
         Instant first = Instant.now();
         Thread.sleep(100);
-        List<Message> messages = generateMessages(count, 2, message->testBuffer.addMessage(message));
+        Map<FeedPath,Message> messages = generateMessages(count, 2, message->testBuffer.addMessage(message));
         testBuffer.dumpBuffer();
         System.out.println("****Getting messages from " + first + " ****");
         List<Message> result = testBuffer.getMessagesAfter(first).toStream().collect(Collectors.toList());
+        
         assertEquals(80, result.size());
+        for (int i = 0; i < 80; i++) {
+            Message received = result.get(i);
+            Message sent = messages.get(received.getName());
+            System.out.println("checking " + received + " against " + sent);
+            assertThat(sent.getHeaders(), equalTo(received.getHeaders()));
+            assertThat(asString(received.getData()), equalTo(asString(sent.getData())));
+        }
+            
         for (int i = 0; i < count; i++)  {
             first = result.get(i).getTimestamp();
             System.out.println("****Getting messages from " + first + " ****");
@@ -237,7 +183,7 @@ public class TestMessageBuffer {
         MessageBuffer buffer = pool.createBuffer(messageSize * 5);
         Instant first = Instant.now();
         Thread.sleep(100);
-        List<Message> generated = generateMessages(40, 2, message->buffer.addMessage(message));
+        Map<FeedPath,Message> generated = generateMessages(40, 2, message->buffer.addMessage(message));
         // pool size should be greater than maximum
         assertThat(pool.getSize(), greaterThan(messageSize * 40L));
         buffer.dumpBuffer();
@@ -272,35 +218,6 @@ public class TestMessageBuffer {
             }
         }    
     }
-    
-    private static void createReceiver(MessageBuffer buffer, Instant from, int count, Queue<Message> results, CountDownLatch completeCount) {
-        System.out.println("Creating receiver from " + from + " expecting " + count + " messages");
-        buffer.getMessagesAfter(from, messages->{
-            int remaining = count;
-            Message current = null;
-            while (messages.hasNext()) {
-                current = messages.next();
-                results.add(current);
-                remaining--;
-            }
-            if (remaining > 0) 
-                createReceiver(buffer, current.getTimestamp(), remaining, results, completeCount);
-            else 
-                completeCount.countDown();
-                
-        });
-    }
-    
-    private static List<BlockingQueue<Message>> createReceivers(CountDownLatch receivers, MessageBuffer buffer, Instant from, int count) {
-        List<BlockingQueue<Message>> results = new ArrayList<>();
-        long createCount = receivers.getCount();
-        for (long i = 0; i < createCount; i++) {
-            ArrayBlockingQueue<Message> queue = new ArrayBlockingQueue(100);
-            createReceiver(buffer,from,count,queue,receivers);
-            results.add(queue);           
-        }
-        return results;
-    }
        
     @Test
     public void testCallback() throws InterruptedException {
@@ -308,7 +225,7 @@ public class TestMessageBuffer {
         MessageBuffer buffer = pool.createBuffer(2000);
         Instant start = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, message->buffer.addMessage(message)); 
+        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, message->buffer.addMessage(message));         
         ArrayBlockingQueue<Message> results = new ArrayBlockingQueue(100);
         CountDownLatch receiving = new CountDownLatch(1);
         createReceiver(buffer, start, 100, results, receiving);
@@ -339,12 +256,24 @@ public class TestMessageBuffer {
         Map<FeedPath,Message> generated = generateMessages(5, 20, 5, message->buffer.addMessage(message)); 
         CountDownLatch receiving = new CountDownLatch(3);
         List<BlockingQueue<Message>> results = createReceivers(receiving, buffer, start, 100);
+        List<Set<FeedPath>> receivedList = new ArrayList<>();
+        results.forEach(r->receivedList.add(new TreeSet<>()));
         while (receiving.getCount() > 0) {
             for (int i = 0; i < results.size(); i++) {
-                Message received = results.get(i).poll(10, TimeUnit.SECONDS);
+                Message received = results.get(i).poll(2, TimeUnit.SECONDS);
                 System.out.println("RX channel(" + i + "):" + received);
-                if (received == null) fail("poll timed out");
-                assertThat(generated, hasEntry(received.getName(), received));
+                if (received == null) {
+                    buffer.dumpBuffer();
+                    System.out.println("received: " + receivedList.get(i).size() + " of " + generated.size());
+                    for (FeedPath sent : generated.keySet()) {
+                        if (!receivedList.get(i).contains(sent))
+                            System.out.println("Dropped: " + sent);
+                    }
+                    if (receiving.getCount() > 0) fail("poll timed out");
+                } else {
+                    receivedList.get(i).add(received.getName());
+                    assertThat(generated, hasEntry(received.getName(), received));
+                }
             }
         }
     }
