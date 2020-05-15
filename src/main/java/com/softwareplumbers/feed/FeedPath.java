@@ -10,7 +10,15 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-/**
+/** Defines the path to a feed or message.
+ * 
+ * Paths are of the form ~feedid/feed/feed/~messageid where
+ * the feedid and messageid components are optional and as many feed
+ * names as desired can be added to the hierarchy.
+ * 
+ * Feed Paths are comparable, with earlier elements being compared first. Paths
+ * starting with similar subsequences are ordered such that the shorter paths appear
+ * first.
  *
  * @author Jonathan Essex
  */
@@ -23,8 +31,14 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         return 0;
     };
     
+    /** Represents an element in a feed path.
+     * 
+     */
     public abstract static class Element implements Comparable<Element> {
         
+        /** The type of an element in the feed path.
+         * 
+         */
         public enum Type {
             FEEDID,
             FEED,

@@ -5,18 +5,26 @@
  */
 package com.softwareplumbers.feed;
 
-/**
+/** Exception classes for Feed services.
  *
  * @author jonathan
  */
 public class FeedExceptions {
     
+    /** Base exception.
+     * 
+     * All checked Feed exceptions will be a subclass.
+     * 
+     */
     public static class BaseException extends Exception {
         public BaseException(String reason) {
             super(reason);
         }
     }
     
+    /** Throw if a path is invalid
+     * 
+     */
     public static class InvalidPath extends BaseException {
         public final FeedPath path;
         public InvalidPath(FeedPath path) {

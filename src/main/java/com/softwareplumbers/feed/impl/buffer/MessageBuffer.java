@@ -25,14 +25,14 @@ import org.slf4j.ext.XLoggerFactory;
  */
 public class MessageBuffer {
     
-    private static XLogger LOG = XLoggerFactory.getXLogger(BufferPool.class);
+    private static final XLogger LOG = XLoggerFactory.getXLogger(BufferPool.class);
     
     private final TreeMap<Instant, Bucket> bucketCache = new TreeMap<>();
     private Bucket current;
-    private BufferPool pool;
-    private Clock clock = new MessageClock();
+    private final BufferPool pool;
+    private final Clock clock = new MessageClock();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-    private CallbackRegistry callbacks = new CallbackRegistry();
+    private final CallbackRegistry callbacks = new CallbackRegistry();
     
     MessageBuffer(BufferPool pool, int initSize) {
         this.pool = pool;
@@ -45,7 +45,7 @@ public class MessageBuffer {
                 : current.size();
     }
         
-    protected void allocateNewBucket(int size, Instant from) {
+    private final void allocateNewBucket(int size, Instant from) {
         if (!bucketCache.isEmpty() && bucketCache.lastEntry().getValue().isEmpty()) {
             pool.resizeBucket(current, size);
         } else {
@@ -63,11 +63,11 @@ public class MessageBuffer {
            return LOG.exit(current.addMessage(message.getTimestamp(), recovered, (is, sz)->handleOverflow(message, sz, is)));        
     }
     
-    public Instant now() {
+    public final Instant now() {
         return clock.instant();
     }
     
-    public boolean isEmpty() {
+    public final boolean isEmpty() {
         try {
             lock.readLock().lock();
             return current.isEmpty() && bucketCache.size() == 1;

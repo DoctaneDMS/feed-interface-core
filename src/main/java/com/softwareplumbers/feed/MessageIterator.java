@@ -5,7 +5,6 @@
  */
 package com.softwareplumbers.feed;
 
-import java.io.Closeable;
 import java.util.Iterator;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -13,23 +12,39 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-/**
+/** A Closeable iterator over messages.
  *
+ * Message iterators must be closed!! Fair question why this instead of Stream.
+ * Answer: Stream does not have a .hasNext(), and an efficient hasNext is important
+ * in some applications. Also programmers are WAY too used to not closing streams
+ * in Java. The hope is that by introducing a specific interface we avoid this
+ * default behavior.
+ * 
  * @author jonathan
  */
-public abstract class MessageIterator implements Closeable, Iterator<Message> {
+public abstract class MessageIterator implements AutoCloseable, Iterator<Message> {
 
-    private final Runnable closeHandler;
+    private Runnable closeHandler;
     
     private MessageIterator(Runnable closeHandler) {
         this.closeHandler = closeHandler;
     }
     
+    /** Release any resources associated with this MessageIterator.
+     * 
+     * The close handler will only be called once.
+     * 
+     */
     @Override
     public void close() {
         closeHandler.run();
+        closeHandler = ()->{};
     }
 
+    /** Convert iterator to a stream
+     * 
+     * @return A stream containing all the messages in this iterator.
+     */
     public Stream<Message> toStream() {
         return StreamSupport.stream(
             Spliterators.spliteratorUnknownSize(
@@ -39,6 +54,14 @@ public abstract class MessageIterator implements Closeable, Iterator<Message> {
             false);        
     }
     
+    /** Create a new message iterator which peeks at messages.
+     * 
+     * The supplied consumer will be invoked as each message is
+     * by the returned iterator.
+     * 
+     * @param consumer function to process individual messages
+     * @return A new iterator
+     */
     public MessageIterator peek(Consumer<Message> consumer) {
         return new Chained(this, consumer);
     }
@@ -106,7 +129,10 @@ public abstract class MessageIterator implements Closeable, Iterator<Message> {
         private int pos;
         
         private final void skip() {
-            while (pos < seq.length && !seq[pos].hasNext()) pos++;            
+            while (pos < seq.length && !seq[pos].hasNext()) {
+                seq[pos].close();
+                pos++;
+            }            
         }
         
         public Sequence(MessageIterator... seq) {
@@ -130,18 +156,42 @@ public abstract class MessageIterator implements Closeable, Iterator<Message> {
         }       
     }
     
+    /** Create a MessageIterator from another iterator, plus a handler to release resources.
+     * 
+     * @param messages Iterator over messages.
+     * @param closeHandler Function to release resources.
+     * @return A MessageIterator.
+     */
     public static MessageIterator of(Iterator<Message> messages, Runnable closeHandler) {
         return new Delegator(messages, closeHandler);
     }
     
+    /** Create a MessageIterator from a stream.
+     * 
+     * The stream's close method will be called when the returned iterator
+     * is closed.
+     * 
+     * @param messages
+     * @return 
+     */
     public static MessageIterator of(Stream<Message> messages) {
         return new Delegator(messages.iterator(), ()->messages.close());
     }
     
+    /** Create a MessageIterator over a single message.
+     * 
+     * @param message
+     * @return 
+     */
     public static MessageIterator of(Message message) {
         return new Singleton(message);
     }
     
+    /** Create a message iterator over several iterators that will be processed in order.
+     * 
+     * @param iterators
+     * @return 
+     */
     public static MessageIterator of(MessageIterator... iterators) {
         return new Sequence(iterators);
     }
