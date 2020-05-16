@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -51,8 +52,20 @@ public interface Message {
      * @return 
      */
     public InputStream getData();
+    public Message setData(InputStreamSupplier data, long length);
+    
+    /** Convert the message headers to a binary stream.
+     * 
+     * The returned stream has a Json part (which consists of the Json object
+     * { name: *name*, timestamp: *timestamp*, headers: *headers*, length: *length* }
+     * 
+     * @return
+     * @throws IOException 
+     */
+    public InputStream getHeaderStream() throws IOException;    
     
     public FeedPath getName();
+    public long getLength();
     public Instant getTimestamp();
     public Message setTimestamp(Instant timestamp);   
     
@@ -76,16 +89,9 @@ public interface Message {
         return getName().beforeMessageId();
     }
     
-    /** Convert the entire message to a binary stream.
-     * 
-     * The returned stream has a Json part (which consists of the Json object
-     * { name: *name*, timestamp: *timestamp*, headers: *headers* } immediately
-     * followed by the binary part.
-     * 
-     * @return
-     * @throws IOException 
-     */
-    public InputStream toStream() throws IOException;
+
+    
+    public void writeHeaders(OutputStream os) throws IOException;
     
     /** Write to output stream with optional error callback.
      * 
@@ -102,17 +108,17 @@ public interface Message {
      * @return result of error handler, or null if no error.
      * @throws IOException 
      */
-    public <T> T write(OutputStream os, ErrorHandler<T> errorCallback) throws IOException;
+    public <T> T writeData(OutputStream os, ErrorHandler<T> errorCallback) throws IOException;
     
     /** Write to a stream.
      * 
-     * Writes with no error handler.
+     * Writes data with no error handler.
      * 
      * @param os Output stream to write to
      * @throws IOException 
      */
-    public default void write(OutputStream os) throws IOException {
-        write(os, (e,is)->{ throw e; });
+    public default void writeData(OutputStream os) throws IOException {
+        writeData(os, (e,is)->{ throw e; });
     }
     
     /** Compare messages.

@@ -29,10 +29,10 @@ public class BufferedMessageImpl implements Message {
         final JsonObject headers;
         final FeedPath name;
         final Instant timestamp;
-        final long headerSize;
+        final long length;
         
-        public Headers(JsonObject allHeaders, long headerSize) {
-            this.headerSize = headerSize;
+        public Headers(JsonObject allHeaders) {
+            this.length = allHeaders.getJsonNumber("length").longValueExact();
             this.headers = allHeaders.getJsonObject("headers");
             this.name = FeedPath.valueOf(allHeaders.getString("name"));
             this.timestamp = Instant.parse(allHeaders.getString("timestamp"));
@@ -40,23 +40,25 @@ public class BufferedMessageImpl implements Message {
     }
     
     private final InputStreamSupplier data;
-    private Headers allHeaders = null;
+    private final InputStreamSupplier headers;  
+    private Headers headerCache = null;
     
-    public BufferedMessageImpl(InputStreamSupplier data) throws IOException {
+    public BufferedMessageImpl(InputStreamSupplier headers, InputStreamSupplier data) throws IOException {
+        this.headers = InputStreamSupplier.copy(headers);
         this.data = InputStreamSupplier.copy(data);
     }
     
     private Headers getAllHeaders() {
-        if (allHeaders == null) {
-            try (JsonParser parser = Json.createParser(data.get())) {
+        if (headerCache == null) {
+            try (JsonParser parser = Json.createParser(headers.get())) {
                 parser.next();
                 JsonObject json = parser.getObject();
-                allHeaders = new Headers(json, parser.getLocation().getStreamOffset());
+                headerCache = new Headers(json);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             } 
         }
-        return allHeaders;
+        return headerCache;
     }
     
      
@@ -64,13 +66,30 @@ public class BufferedMessageImpl implements Message {
     public JsonObject getHeaders() {
         return getAllHeaders().headers;
     }
+    
+    @Override
+    public long getLength() {
+        return getAllHeaders().length;
+    }
 
     @Override
     public InputStream getData() {
         try {
-            InputStream is = data.get();
-            is.skip(getAllHeaders().headerSize);
-            return is;
+            return data.get();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
+    @Override
+    public MessageImpl setData(InputStreamSupplier data, long length) {
+        return new MessageImpl(getId(), getName(), getTimestamp(), getHeaders(),length, data);
+    }    
+
+    @Override
+    public InputStream getHeaderStream() {
+        try {
+            return headers.get();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -88,7 +107,7 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public Message setTimestamp(Instant timestamp) {
-        return new MessageImpl(getId(), getName(), timestamp, getHeaders(), ()->getData());
+        return new MessageImpl(getId(), getName(), timestamp, getHeaders(), getLength(), data);
     }
     
     @Override
@@ -96,13 +115,10 @@ public class BufferedMessageImpl implements Message {
         return getName().part.getId().get();
     }
     
-    @Override
-    public InputStream toStream() throws IOException {
-        return data.get();
-    }
+
     
     @Override
-    public <T> T write(OutputStream out, ErrorHandler<T> errorCallback) throws IOException {
+    public <T> T writeData(OutputStream out, ErrorHandler<T> errorCallback) throws IOException {
         try {
             OutputStreamConsumer.of(data).consume(out);
         } catch (IOException e) {            
@@ -110,6 +126,11 @@ public class BufferedMessageImpl implements Message {
         }
         return null;
     }
+    
+     @Override
+    public void writeHeaders(OutputStream out) throws IOException {
+        OutputStreamConsumer.of(headers).consume(out);
+    }   
     
     @Override
     public boolean equals(Object other) {
@@ -123,7 +144,7 @@ public class BufferedMessageImpl implements Message {
     @Override
     public String toString() {
         byte[] truncatedHeaders = new byte[64];
-        try (InputStream is = data.get()) {
+        try (InputStream is = headers.get()) {
             is.read(truncatedHeaders);
             return "BufferedMessage[ " + new String(truncatedHeaders) + "... ]";
         } catch (IOException e) {

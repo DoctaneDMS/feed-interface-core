@@ -54,13 +54,10 @@ public class MessageBuffer {
         }
     }
     
-    protected Message handleOverflow(Message message, int size, InputStream recovered) throws IOException {
-        LOG.entry(message, size, "<input stream>");
+    protected Message handleOverflow(Message message, int size) throws IOException {
+        LOG.entry(message);
         allocateNewBucket(calcNewSize(size), message.getTimestamp()); 
-        if (recovered == null)
-           return LOG.exit(current.addMessage(message, (is, sz)->handleOverflow(message, sz, is)));
-        else
-           return LOG.exit(current.addMessage(message.getTimestamp(), recovered, (is, sz)->handleOverflow(message, sz, is)));        
+        return LOG.exit(current.addMessage(message, this::handleOverflow));
     }
     
     public final Instant now() {
@@ -82,9 +79,9 @@ public class MessageBuffer {
         try {
             lock.writeLock().lock();
             Message timestamped = message.setTimestamp(Instant.now(clock));
-            result = current.addMessage(timestamped, (is, sz)->handleOverflow(timestamped, sz, is));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            result = current.addMessage(timestamped, this::handleOverflow);
+        } catch (IOException ioe) {
+            throw new RuntimeException(ioe);
         } finally {
             lock.writeLock().unlock();
         }

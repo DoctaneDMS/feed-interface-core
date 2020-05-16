@@ -29,7 +29,6 @@ public class FeedExceptions {
         public BaseRuntimeException(BaseException e) {
             super(e);
         }
-        
     }
     
     /** Throw if a path is invalid

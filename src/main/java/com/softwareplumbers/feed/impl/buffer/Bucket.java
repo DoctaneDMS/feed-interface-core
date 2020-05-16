@@ -7,12 +7,12 @@ package com.softwareplumbers.feed.impl.buffer;
 
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.feed.Message;
+import com.softwareplumbers.feed.impl.MessageImpl;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
@@ -24,7 +24,7 @@ class Bucket {
     
     @FunctionalInterface
     public interface OverflowHandler {
-        public Message recover(InputStream recovered, int currentSize) throws IOException;
+        public Message recover(Message message, int size) throws IOException;
     }
     
     private byte[] buffer;
@@ -97,32 +97,26 @@ class Bucket {
 
     public Message addMessage(Message message, OverflowHandler handler) throws IOException {
         int start = position;
-        Message recovered = message.write(out, (e,is)->recoveryHandler(e, start, is, handler));
+        Message recovered = message.writeData(out, (e,is)->recoveryHandler(message, e, start, is, handler));
         if (recovered != null) return recovered;
-        Message buffered = new BufferedMessageImpl(chunk(start, position));
+        int endData = position;
+        try {
+            message.writeHeaders(out);
+        } catch (BufferOverflow oe) {
+            recovered = message.setData(chunk(start,endData), -1);
+            return handler.recover(recovered, start-position);
+        }
+        
+        Message buffered = new BufferedMessageImpl(chunk(endData, position), chunk(start, endData));
         timeIndex.put(message.getTimestamp(), buffered);
         return buffered;
     }
     
-    public Message addMessage(Instant timestamp, InputStream recovered, OverflowHandler handler) throws IOException {
-        int start = position;
-        int count;
-        while ((count = recovered.read(buffer, position, buffer.length - position)) >= 0 && position < buffer.length) {
-            position += count;
-        }
-        if (count < 0) {
-            Message buffered = new BufferedMessageImpl(chunk(start, position));
-            timeIndex.put(timestamp, buffered);
-            return buffered;
-        } else {
-            return handler.recover(recovered, position-start);
-        }
-    }
-
-    private Message recoveryHandler(IOException e, int start, InputStream recovered, OverflowHandler overflowHandler) throws IOException {
+    private Message recoveryHandler(Message message, IOException e, int start, InputStream recoveredData, OverflowHandler overflowHandler) throws IOException {
         if (e instanceof BufferOverflow) {
-            recovered = recovered == null ? null : new SequenceInputStream(chunk(start, position).get(), recovered);
-            return overflowHandler.recover(recovered, position - start);
+            if (recoveredData != null) {
+                message = message.setData(()->new SequenceInputStream(chunk(start, position).get(), recoveredData), -1);            }
+            return overflowHandler.recover(message, start-position);
         } else {
             throw e;
         }

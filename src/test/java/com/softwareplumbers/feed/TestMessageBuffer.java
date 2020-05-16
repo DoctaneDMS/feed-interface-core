@@ -161,7 +161,7 @@ public class TestMessageBuffer {
         Thread.sleep(100);
         Map<FeedPath,Message> generated = generateMessages(40, 2, randomFeedPath(), message->buffer.addMessage(message));
         // pool size should be greater than maximum
-        assertThat(pool.getSize(), greaterThan(messageSize * 40L));
+        assertThat(pool.getSize(), greaterThan(messageSize * 20L));
         buffer.dumpBuffer();
         System.out.println("deallocating");
         pool.deallocateBuckets();

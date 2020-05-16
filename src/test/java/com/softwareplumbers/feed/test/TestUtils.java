@@ -97,7 +97,9 @@ public class TestUtils {
         byte[] buffer = new byte[10000];
         int pos = 0;
         for (int i = 0; i < 20; i ++) {
-            pos += generateMessage(randomFeedPath()).toStream().read(buffer, pos, buffer.length - pos);
+            Message message = generateMessage(randomFeedPath());
+            pos+=message.getLength();
+            pos+=message.getHeaderStream().skip(Long.MAX_VALUE);
         }
         return pos/20;    
     }
