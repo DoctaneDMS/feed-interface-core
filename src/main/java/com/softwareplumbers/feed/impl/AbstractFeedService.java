@@ -65,6 +65,14 @@ public abstract class AbstractFeedService implements FeedService {
         getOrCreateBuffer(path).getMessagesAfter(from, callback);
         LOG.exit();
     }
+    
+    @Override
+    public void cancelCallback(FeedPath path, Consumer<MessageIterator> callback) throws InvalidPath {
+        LOG.entry(path, callback);
+        if (path.isEmpty() || path.part.getId().isPresent()) throw LOG.throwing(new InvalidPath(path));
+        getBuffer(path).orElseThrow(()->new InvalidPath(path)).cancelCallback(callback);
+        LOG.exit();        
+    }
 
     @Override
     public MessageIterator sync(FeedPath path, Instant from) throws InvalidPath {

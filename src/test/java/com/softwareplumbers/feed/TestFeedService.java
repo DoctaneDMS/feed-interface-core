@@ -6,6 +6,7 @@
 package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
+import com.softwareplumbers.feed.test.TestUtils;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
@@ -18,8 +19,11 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.fail;
@@ -74,6 +78,29 @@ public class TestFeedService {
         assertThat(count, equalTo(1000));        
     }
     
+    @Test 
+    public void testCancelCallback() throws InvalidPath, InterruptedException {
+        
+        BlockingQueue<Message> results = new ArrayBlockingQueue<Message>(10); 
+        
+        Consumer<MessageIterator> callback = mi->{
+            mi.forEachRemaining(m->{
+                try {
+                    results.put(m);
+                } catch (InterruptedException e) {
+                    // hate these
+                }
+            });
+        };
+          
+        FeedPath feed = randomFeedPath();
+        service.listen(feed, Instant.now(), callback);
+        service.cancelCallback(feed, callback);
+        post(generateMessage(feed));
+               
+        assertThat(results.poll(100, TimeUnit.MILLISECONDS), nullValue());
+    }
+    
     @Test
     public void testMessagesForFeed() throws InterruptedException {
         //more of a test-of-test fixture 
@@ -93,7 +120,7 @@ public class TestFeedService {
         
         Instant start = Instant.now();
 
-        // 8 threads each writing 200 messages split across 4 feeds
+        // 8 threads each writing 20 messages split across 4 feeds
         NavigableMap<FeedPath, Message> sentMessages = generateMessages(8, 20, 2, getFeeds(), this::post); 
         List<FeedPath> feeds = getFeeds();
         // 8 receivers split across 4 feeds, each should receive all the messages sent to a single feed.

@@ -33,6 +33,8 @@ public interface FeedService {
      */
     void listen(FeedPath path, Instant after, Consumer<MessageIterator> messageConsumer) throws InvalidPath;
     
+    void cancelCallback(FeedPath path, Consumer<MessageIterator> messageConsumer) throws InvalidPath;
+    
     /** Get messages synchronously.
      * 
      * Sync will return all messages with a timestamp after the given instant.

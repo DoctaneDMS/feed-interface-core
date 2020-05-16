@@ -7,8 +7,11 @@ package com.softwareplumbers.feed.impl.buffer;
 
 import com.softwareplumbers.feed.MessageIterator;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.slf4j.ext.XLogger;
@@ -31,30 +34,38 @@ public class CallbackRegistry {
         }
     }
     
-    LinkedList<Entry> callbacks = new LinkedList<>();
+    HashMap<Consumer<MessageIterator>, Instant> callbacks = new HashMap<>();
     
     public void addCallback(Instant from, Consumer<MessageIterator> callback) {
         LOG.entry(from, callback);
         synchronized(this) {
-            callbacks.add(new Entry(from, callback));
+            callbacks.put(callback, from);
+        }
+        LOG.exit();
+    }
+    
+    void cancel(Consumer<MessageIterator> callback) {
+        LOG.entry(callback);
+        synchronized(this) {
+           callbacks.remove(callback);
         }
         LOG.exit();
     }
     
     void callback(Function<Instant, MessageIterator> search) {
-        List<Entry> invocable;
+        HashMap<Consumer<MessageIterator>,Instant> invocable;
         LOG.entry(search);
         synchronized(this) {
             invocable = callbacks;
-            callbacks = new LinkedList<>();            
+            callbacks = new HashMap<>();            
         }
         LOG.debug("after synchronized block");
-        invocable.stream().forEach(entry->{
-            LOG.debug("notifiying {} of messages starting {}", entry.callback, entry.from);
-            try (MessageIterator results = search.apply(entry.from)) {
-                entry.callback.accept(results);
+        invocable.forEach((callback,from)->{
+            LOG.debug("notifiying {} of messages starting {}", callback, from);
+            try (MessageIterator results = search.apply(from)) {
+                callback.accept(results);
             }
-            LOG.debug("done sending messages to {}", entry.callback);
+            LOG.debug("done sending messages to {}", callback);
         });
         LOG.exit();
     }

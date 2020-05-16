@@ -131,6 +131,9 @@ public class MessageBuffer {
         LOG.exit();
     }
 
+    public void cancelCallback(Consumer<MessageIterator> callback) {
+        callbacks.cancel(callback);
+    }
     
     public void dumpBuffer() {
         for (Instant bucketStart : bucketCache.keySet()) {
