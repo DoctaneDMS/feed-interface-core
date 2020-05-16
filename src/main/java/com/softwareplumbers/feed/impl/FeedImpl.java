@@ -32,4 +32,8 @@ public class FeedImpl implements Feed {
         return id;
     }
     
+    @Override
+    public String toString() {
+        return "FeedImpl[" + id + "," + name + "]";
+    }
 }
