@@ -7,6 +7,8 @@ package com.softwareplumbers.feed.impl.buffer;
 
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.common.pipedstream.OutputStreamConsumer;
+import com.softwareplumbers.feed.FeedExceptions;
+import com.softwareplumbers.feed.FeedExceptions.StreamingException;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.impl.MessageImpl;
@@ -43,9 +45,13 @@ public class BufferedMessageImpl implements Message {
     private final InputStreamSupplier headers;  
     private Headers headerCache = null;
     
-    public BufferedMessageImpl(InputStreamSupplier headers, InputStreamSupplier data) throws IOException {
-        this.headers = InputStreamSupplier.copy(headers);
-        this.data = InputStreamSupplier.copy(data);
+    public BufferedMessageImpl(InputStreamSupplier headers, InputStreamSupplier data) throws FeedExceptions.StreamingException {
+        try {
+            this.headers = InputStreamSupplier.copy(headers);
+            this.data = InputStreamSupplier.copy(data);
+        } catch (IOException e) {
+            throw new StreamingException(e);
+        }
     }
     
     private Headers getAllHeaders() {
@@ -55,7 +61,7 @@ public class BufferedMessageImpl implements Message {
                 JsonObject json = parser.getObject();
                 headerCache = new Headers(json);
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw FeedExceptions.runtime(e);
             } 
         }
         return headerCache;
@@ -77,7 +83,7 @@ public class BufferedMessageImpl implements Message {
         try {
             return data.get();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw FeedExceptions.runtime(e);
         }
     }
     
@@ -91,7 +97,7 @@ public class BufferedMessageImpl implements Message {
         try {
             return headers.get();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw FeedExceptions.runtime(e);
         }
     }
 
@@ -118,7 +124,7 @@ public class BufferedMessageImpl implements Message {
 
     
     @Override
-    public <T> T writeData(OutputStream out, ErrorHandler<T> errorCallback) throws IOException {
+    public <T> T writeData(OutputStream out, ErrorHandler<T> errorCallback) throws FeedExceptions.StreamingException {
         try {
             OutputStreamConsumer.of(data).consume(out);
         } catch (IOException e) {            
@@ -128,8 +134,13 @@ public class BufferedMessageImpl implements Message {
     }
     
      @Override
-    public void writeHeaders(OutputStream out) throws IOException {
-        OutputStreamConsumer.of(headers).consume(out);
+    public void writeHeaders(OutputStream out) throws FeedExceptions.StreamingException
+    {   
+        try {
+            OutputStreamConsumer.of(headers).consume(out);
+        } catch(IOException e) {
+            throw new StreamingException(e);
+        }
     }   
     
     @Override

@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -21,7 +22,8 @@ public class FeedExceptions {
     
     public static enum Type {
         INVALID_PATH,
-        INVALID_JSON
+        INVALID_JSON,
+        STREAMING_EXCEPTION
     }
     
     /** Base exception.
@@ -33,6 +35,10 @@ public class FeedExceptions {
         public final Type type;
         public BaseException(Type type, String reason) {
             super(reason);
+            this.type = type;
+        }
+        public BaseException(Type type, Exception cause) {
+            super(cause);
             this.type = type;
         }
         public static Optional<Type> getType(JsonObject obj) {
@@ -56,15 +62,42 @@ public class FeedExceptions {
         }
     }
     
+    public static class StreamingException extends BaseException {
+        public StreamingException(IOException e) {
+            super(Type.STREAMING_EXCEPTION, e);
+        }
+        public StreamingException(String reason) {
+            super(Type.STREAMING_EXCEPTION, reason);
+        }
+        public static Optional<String> getReason(JsonObject object) {
+            try {
+                return Optional.of(object.getString("reason"));
+            } catch (Exception e) {
+                return Optional.empty();
+            }
+        }
+        public JsonObjectBuilder buildJson(JsonObjectBuilder bldr) {
+            IOException e = (IOException)getCause();
+            if (e == null)
+                return super.buildJson(bldr).add("reason", getMessage());
+            else    
+                return super.buildJson(bldr).add("reason", e.getMessage());
+        }    
+    }
     
     /** Throw if a path is invalid
      * 
      */
     public static class InvalidJson extends BaseException {
-        public final JsonObject json;
-        public InvalidJson(JsonObject json) {
-            super(Type.INVALID_JSON, "Invalid Json: " + json.toString());
+        public final Optional<JsonObject> json;
+        public final String reason;
+        public InvalidJson(String reason, Optional<JsonObject> json) {
+            super(Type.INVALID_JSON, reason);
             this.json = json;
+            this.reason = reason;
+        }
+        public InvalidJson(String reason, JsonObject json) {
+            this(reason, Optional.of(json));
         }
         public static Optional<JsonObject> getJson(JsonObject object) {
             try {
@@ -73,8 +106,17 @@ public class FeedExceptions {
                 return Optional.empty();
             }
         }
+        public static Optional<String> getReason(JsonObject object) {
+            try {
+                return Optional.of(object.getString("reason"));
+            } catch (Exception e) {
+                return Optional.empty();
+            }
+        }
         public JsonObjectBuilder buildJson(JsonObjectBuilder bldr) {
-            return super.buildJson(bldr).add("json", json);
+            bldr = super.buildJson(bldr).add("reason", reason);
+            if (json.isPresent()) bldr = bldr.add("json", json.get());
+            return bldr;
         }
     }
 
@@ -100,25 +142,35 @@ public class FeedExceptions {
     }
     
     public static BaseException build(JsonObject json) throws InvalidJson {
-        Type type = BaseException.getType(json).orElseThrow(()->new InvalidJson(json));
+        Type type = BaseException.getType(json).orElseThrow(()->new InvalidJson("missing type", json));
         switch(type) {
             case INVALID_PATH:
-                return new InvalidPath(InvalidPath.getPath(json).orElseThrow(()->new InvalidJson(json)));
+                return new InvalidPath(InvalidPath.getPath(json).orElseThrow(()->new InvalidJson("missing path", json)));
             case INVALID_JSON:
-                return new InvalidJson(InvalidJson.getJson(json).orElseThrow(()->new InvalidJson(json)));
+                return new InvalidJson(InvalidJson.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)), InvalidJson.getJson(json));
+            case STREAMING_EXCEPTION:
+                return new StreamingException(StreamingException.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)));
             default:
-                throw new InvalidJson(json);
+                throw new InvalidJson("invalid type value", json);
         }
     }
     
     @FunctionalInterface
     public static interface CheckedConsumer<T> {
-        void accept(T t) throws BaseException;
+        void accept(T t) throws BaseException, IOException;
     }
 
     @FunctionalInterface
     public static interface CheckedBiConsumer<T,U> {
-        void accept(T t, U u) throws BaseException;
+        void accept(T t, U u) throws BaseException, IOException;
+    }
+    
+    public static BaseRuntimeException runtime(BaseException e) {
+        return new BaseRuntimeException(e);
+    }
+    
+    public static BaseRuntimeException runtime(IOException e) {
+        return runtime(new StreamingException(e));
     }
     
     public static <T> Consumer<T> runtime(final CheckedConsumer<T> consumer) {
@@ -126,7 +178,9 @@ public class FeedExceptions {
             try {
                 consumer.accept(t);
             } catch (BaseException e) {
-                throw new BaseRuntimeException(e);
+                throw runtime(e);
+            } catch (IOException e) {
+                throw runtime(e);
             }
         };
     }
@@ -136,8 +190,12 @@ public class FeedExceptions {
             try {
                 consumer.accept(t,u);
             } catch (BaseException e) {
-                throw new BaseRuntimeException(e);
+                throw runtime(e);
+            } catch (IOException e) {
+                throw runtime(e);
             }
         };
-    }    
+    }  
+    
+   
 }

@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed.impl;
 
+import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
@@ -72,7 +73,7 @@ public class MessageFactory {
                 try {
                     input.close();
                 } catch(IOException e) {
-                    throw new RuntimeException(e);
+                    throw FeedExceptions.runtime(e);
                 }
             });
             this.input = input;
@@ -83,8 +84,8 @@ public class MessageFactory {
         private final void moveNext() {
             try {
                 current = build(input, nameSupplier, false);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            } catch (FeedExceptions.BaseException e) {
+                throw FeedExceptions.runtime(e);
             }         
         }
 
@@ -104,36 +105,40 @@ public class MessageFactory {
     
     public static final int MAX_HEADER_SIZE = 10000;
     
-    public static Optional<JsonObject> parseHeaders(InputStream data) throws IOException {
-        if (!data.markSupported()) throw new RuntimeException("Mark not supported");
+    public static Optional<JsonObject> parseHeaders(InputStream data) throws FeedExceptions.InvalidJson, FeedExceptions.StreamingException {
+        if (!data.markSupported()) throw new FeedExceptions.StreamingException("Mark not supported");
         data.mark(MAX_HEADER_SIZE);
-        try (JsonParser parser = Json.createParser(data)) {
-            if (parser.hasNext()) {
-                parser.next();
-                JsonObject result = parser.getObject();
+        try {
+            try (JsonParser parser = Json.createParser(data)) {
+                if (parser.hasNext()) {
+                    parser.next();
+                    JsonObject result = parser.getObject();
+                    data.reset();
+                    data.skip(parser.getLocation().getStreamOffset());
+                    return Optional.of(result);
+                } else {
+                    return Optional.empty();
+                }
+            } catch (JsonException e) {
                 data.reset();
-                data.skip(parser.getLocation().getStreamOffset());
-                return Optional.of(result);
-            } else {
-                return Optional.empty();
+                byte[] buffer = new byte[128];
+                int read = data.read(buffer);
+                if (read >= 0) {
+                    LOG.error("JSON parsing error: {}", e.getMessage());
+                    String context = new String(Arrays.copyOf(buffer, read));
+                    LOG.error("JSON context: {}", context);
+                    throw(new FeedExceptions.InvalidJson(e.getMessage(), Optional.empty()));
+                } else {
+                    return Optional.empty();
+                }
             }
-        } catch (JsonException e) {
-            data.reset();
-            byte[] buffer = new byte[128];
-            int read = data.read(buffer);
-            if (read >= 0) {
-                LOG.error("JSON parsing error: {}", e.getMessage());
-                String context = new String(Arrays.copyOf(buffer, read));
-                LOG.error("JSON context: {}", context);
-                throw(e);
-            } else {
-                return Optional.empty();
-            }
+        } catch (IOException e) {
+            throw new FeedExceptions.StreamingException(e);
         }
     }
     
     
-    private Optional<Message> build(InputStream data, Optional<Supplier<FeedPath>> nameSupplier, boolean temporary) throws IOException {
+    private Optional<Message> build(InputStream data, Optional<Supplier<FeedPath>> nameSupplier, boolean temporary) throws FeedExceptions.InvalidJson, FeedExceptions.StreamingException {
         if (!data.markSupported()) {
             data = new BufferedInputStream(data);
         }
@@ -163,20 +168,20 @@ public class MessageFactory {
         }
     }
     
-    public Optional<Message> build(InputStream data, boolean temporary) throws IOException {
+    public Optional<Message> build(InputStream data, boolean temporary) throws FeedExceptions.InvalidJson, FeedExceptions.StreamingException {
         return build(data, Optional.empty(), temporary);
     }
     
-    public Optional<Message> build(InputStream data, Supplier<FeedPath> names, boolean temporary) throws IOException {
+    public Optional<Message> build(InputStream data, Supplier<FeedPath> names, boolean temporary)  throws FeedExceptions.InvalidJson, FeedExceptions.StreamingException  {
         return build(data, Optional.of(names), temporary);
     }
     
-    public void consume(InputStream data, Consumer<Message> messageConsumer, Optional<Supplier<FeedPath>> names) throws IOException {
+    public void consume(InputStream data, Consumer<Message> messageConsumer, Optional<Supplier<FeedPath>> names)  throws FeedExceptions.InvalidJson, FeedExceptions.StreamingException  {
         Optional<Message> message;
         while ((message = build(data, names, false)).isPresent()) messageConsumer.accept(message.get());
     }
     
-    public MessageIterator buildIterator(InputStream data, Optional<Supplier<FeedPath>> names) throws IOException {
+    public MessageIterator buildIterator(InputStream data, Optional<Supplier<FeedPath>> names) throws FeedExceptions.InvalidJson, FeedExceptions.StreamingException  {
         return new StreamIterator(data, names);
     }
         

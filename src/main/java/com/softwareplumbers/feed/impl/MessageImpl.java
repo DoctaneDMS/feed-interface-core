@@ -6,6 +6,7 @@
 package com.softwareplumbers.feed.impl;
 
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
+import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
 import java.io.BufferedInputStream;
@@ -19,6 +20,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.json.Json;
 import javax.json.JsonException;
 import javax.json.JsonObject;
@@ -50,14 +53,22 @@ public class MessageImpl implements Message {
         this.length = length;
     }
     
-    public MessageImpl(FeedPath name, Instant timestamp, JsonObject headers, InputStream data, long length, boolean temporary) throws IOException {
+    private static InputStreamSupplier supplierOf(InputStream data, boolean temporary) {
+        try {
+            return temporary ? ()->data : InputStreamSupplier.copy(()->data);
+        } catch (IOException e) {
+            throw FeedExceptions.runtime(e);
+        }
+    }
+    
+    public MessageImpl(FeedPath name, Instant timestamp, JsonObject headers, InputStream data, long length, boolean temporary) {
         this(
             name.part.getId().orElseThrow(()->new RuntimeException("no message id in name")),
             name,
             timestamp,
             headers,
             length,
-            temporary ? ()->data : InputStreamSupplier.copy(()->data)
+            supplierOf(data, temporary)
         );
     }
     
@@ -127,7 +138,7 @@ public class MessageImpl implements Message {
     }
 
     @Override
-    public <T> T writeData(OutputStream os, ErrorHandler<T> errorHandler) throws IOException {
+    public <T> T writeData(OutputStream os, ErrorHandler<T> errorHandler) throws FeedExceptions.StreamingException {
         try (InputStream is = supplier.get()) {
             int read = 0;
             long written = 0L;
@@ -142,15 +153,17 @@ public class MessageImpl implements Message {
             } catch (IOException e) {
                 return errorHandler.recover(e, new SequenceInputStream(new ByteArrayInputStream(buffer, 0, read), is));
             }
+        } catch (IOException e) {
+            throw FeedExceptions.runtime(e);
         }
     }
     
     @Override
-    public void writeHeaders(OutputStream os) throws IOException {
+    public void writeHeaders(OutputStream os) throws FeedExceptions.StreamingException {
         try (JsonWriter writer = Json.createWriter(os)) {
             writer.write(getAllHeaders());
         } catch (JsonException e) {
-            throw (IOException)e.getCause();                
+            throw new FeedExceptions.StreamingException((IOException)e.getCause());                
         }        
     }
     
@@ -159,9 +172,11 @@ public class MessageImpl implements Message {
         try (ByteArrayOutputStream byteStream = new ByteArrayOutputStream()) {
             writeHeaders(byteStream);
             return new ByteArrayInputStream(byteStream.toByteArray());
+        } catch (FeedExceptions.StreamingException e) {
+            throw FeedExceptions.runtime(e);
         } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+            throw FeedExceptions.runtime(e);
+        } 
     }
     
     @Override

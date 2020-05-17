@@ -6,6 +6,8 @@
 package com.softwareplumbers.feed.impl.buffer;
 
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
+import com.softwareplumbers.feed.FeedExceptions;
+import com.softwareplumbers.feed.FeedExceptions.StreamingException;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.impl.MessageImpl;
 import java.io.IOException;
@@ -24,7 +26,7 @@ class Bucket {
     
     @FunctionalInterface
     public interface OverflowHandler {
-        public Message recover(Message message, int size) throws IOException;
+        public Message recover(Message message, int size) throws StreamingException;
     }
     
     private byte[] buffer;
@@ -95,16 +97,18 @@ class Bucket {
     }
     
 
-    public Message addMessage(Message message, OverflowHandler handler) throws IOException {
+    public Message addMessage(Message message, OverflowHandler handler) throws FeedExceptions.StreamingException {
         int start = position;
         Message recovered = message.writeData(out, (e,is)->recoveryHandler(message, e, start, is, handler));
         if (recovered != null) return recovered;
         int endData = position;
         try {
             message.writeHeaders(out);
-        } catch (BufferOverflow oe) {
-            recovered = message.setData(chunk(start,endData), -1);
-            return handler.recover(recovered, start-position);
+        } catch (StreamingException e) {
+            if (e.getCause() instanceof BufferOverflow) {
+                recovered = message.setData(chunk(start,endData), -1);
+                return handler.recover(recovered, start-position);
+            }
         }
         
         Message buffered = new BufferedMessageImpl(chunk(endData, position), chunk(start, endData));
@@ -112,13 +116,14 @@ class Bucket {
         return buffered;
     }
     
-    private Message recoveryHandler(Message message, IOException e, int start, InputStream recoveredData, OverflowHandler overflowHandler) throws IOException {
+    private Message recoveryHandler(Message message, IOException e, int start, InputStream recoveredData, OverflowHandler overflowHandler) throws StreamingException {
         if (e instanceof BufferOverflow) {
             if (recoveredData != null) {
-                message = message.setData(()->new SequenceInputStream(chunk(start, position).get(), recoveredData), -1);            }
+                message = message.setData(()->new SequenceInputStream(chunk(start, position).get(), recoveredData), -1);
+            } 
             return overflowHandler.recover(message, start-position);
         } else {
-            throw e;
+            throw new StreamingException(e);
         }
     }
 

@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import com.softwareplumbers.feed.FeedExceptions.InvalidJson;
 import com.softwareplumbers.feed.impl.MessageFactory;
 import static com.softwareplumbers.feed.test.TestUtils.asString;
 import java.io.ByteArrayInputStream;
@@ -32,7 +33,7 @@ import org.junit.Test;
 public class TestMessageFactory {
     
     @Test
-    public void testParseFromStream() throws IOException {
+    public void testParseFromStream() throws IOException, InvalidJson, FeedExceptions.StreamingException {
         MessageFactory factory = new MessageFactory();
         InputStream data = new ByteArrayInputStream("{ \"headers\": { \"a\" : \"one\" } }plus some more unstructured data".getBytes());
         Message message = factory.build(data, ()->FeedPath.ROOT.addId("test"), false).orElseThrow(()->new RuntimeException("no message"));
@@ -43,7 +44,7 @@ public class TestMessageFactory {
     }
     
     @Test 
-    public void testParseTempFromStream() throws IOException {
+    public void testParseTempFromStream() throws IOException, InvalidJson, FeedExceptions.StreamingException {
         MessageFactory factory = new MessageFactory();
         InputStream data = new ByteArrayInputStream("{ \"headers\": { \"a\" : \"one\" } }plus some more unstructured data".getBytes());
         Message message = factory.build(data, ()->FeedPath.ROOT.addId("test"), true).orElseThrow(()->new RuntimeException("no message"));
@@ -56,7 +57,7 @@ public class TestMessageFactory {
     }   
     
     @Test
-    public void testIteratorFromStream() throws IOException {
+    public void testIteratorFromStream() throws IOException, InvalidJson, FeedExceptions.StreamingException {
         
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         Map<FeedPath, Message> messages = generateBinaryMessageStream(20, bos);
@@ -73,7 +74,7 @@ public class TestMessageFactory {
     }
     
     @Test
-    public void testConsumerFromStream() throws IOException {
+    public void testConsumerFromStream() throws IOException, InvalidJson, FeedExceptions.StreamingException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         Map<FeedPath, Message> messages = generateBinaryMessageStream(20, bos);
         new MessageFactory().consume(new ByteArrayInputStream(bos.toByteArray()), message->{

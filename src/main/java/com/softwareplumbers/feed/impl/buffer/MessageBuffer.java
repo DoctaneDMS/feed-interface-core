@@ -5,6 +5,8 @@
  */
 package com.softwareplumbers.feed.impl.buffer;
 
+import com.softwareplumbers.feed.FeedExceptions.StreamingException;
+import static com.softwareplumbers.feed.FeedExceptions.runtime;
 import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.Message;
 import java.io.IOException;
@@ -54,7 +56,7 @@ public class MessageBuffer {
         }
     }
     
-    protected Message handleOverflow(Message message, int size) throws IOException {
+    protected Message handleOverflow(Message message, int size) throws StreamingException {
         LOG.entry(message);
         allocateNewBucket(calcNewSize(size), message.getTimestamp()); 
         return LOG.exit(current.addMessage(message, this::handleOverflow));
@@ -80,8 +82,8 @@ public class MessageBuffer {
             lock.writeLock().lock();
             Message timestamped = message.setTimestamp(Instant.now(clock));
             result = current.addMessage(timestamped, this::handleOverflow);
-        } catch (IOException ioe) {
-            throw new RuntimeException(ioe);
+        } catch (StreamingException e) {
+            throw runtime(e);
         } finally {
             lock.writeLock().unlock();
         }

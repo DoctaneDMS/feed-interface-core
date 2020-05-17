@@ -9,6 +9,8 @@ import com.softwareplumbers.common.pipedstream.OutputStreamConsumer;
 import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedExceptions.BaseRuntimeException;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
+import com.softwareplumbers.feed.FeedExceptions.StreamingException;
+import static com.softwareplumbers.feed.FeedExceptions.runtime;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.FeedService;
 import com.softwareplumbers.feed.Message;
@@ -101,11 +103,7 @@ public class TestUtils {
         InputStream testData = new ByteArrayInputStream(randomText(10).getBytes());
         Instant time = Instant.now(CLOCK);
         FeedPath id = feed.addId(UUID.randomUUID().toString());
-        try {
-            return new MessageImpl(id, time, testHeaders, testData, -1, false);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        return new MessageImpl(id, time, testHeaders, testData, -1, false);
     }
     
     public static int getAverageMessageSize() throws IOException {
@@ -248,8 +246,8 @@ public class TestUtils {
             try {
                 msg.writeHeaders(bos);
                 msg.writeData(bos);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            } catch (StreamingException e) {
+                throw runtime(e);
             }
         });
     }
