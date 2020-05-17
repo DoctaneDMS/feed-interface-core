@@ -20,4 +20,12 @@ public class TestFeedPath {
         FeedPath path = FeedPath.ROOT.add("abc").add("def").addId("123");
         assertThat(FeedPath.valueOf(path.toString()), equalTo(path));
     }
+    
+    @Test
+    public void testBeforeMessageId() {
+        FeedPath path = FeedPath.ROOT.add("abc").add("def");
+        FeedPath pathWithId = path.addId("123");
+        assertThat(pathWithId.beforeMessageId(), equalTo(path));        
+        assertThat(path.beforeMessageId(), equalTo(path));        
+    }
 }

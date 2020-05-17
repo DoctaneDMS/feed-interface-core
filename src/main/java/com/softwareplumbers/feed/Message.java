@@ -96,7 +96,7 @@ public interface Message {
      * @return the id of the message.
      */
     public default String getId() {
-        return getName().part.getId().orElseThrow(()->new RuntimeException("Invalid message id"));
+        return getName() == null ? null : getName().part.getId().orElse(null);
     }
     
     /** Get the path of the feed to which the message was sent.
@@ -106,7 +106,7 @@ public interface Message {
      * @return the id of the message.
      */
     public default FeedPath getFeedName() {
-        return getName().beforeMessageId();
+        return getName() == null ? null : getName().beforeMessageId();
     }
     
 

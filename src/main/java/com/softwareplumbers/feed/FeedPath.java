@@ -233,13 +233,18 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         }
     }
     
-    public FeedPath beforeMessageId() {
+    private FeedPath beforeMessageIdOrEmpty() {
         if (isEmpty()) return ROOT;
         if (part.type == Element.Type.MESSAGEID) {
             return parent;
         } else {
-            return parent.beforeMessageId();
+            return parent.beforeMessageIdOrEmpty();
         }        
+    }
+
+    public FeedPath beforeMessageId() {
+        FeedPath fp = beforeMessageIdOrEmpty();
+        return fp.isEmpty() ? this : fp; 
     }
     
     public static FeedPath valueOf(String path) {

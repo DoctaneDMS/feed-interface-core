@@ -25,6 +25,7 @@ import java.util.logging.Logger;
 import javax.json.Json;
 import javax.json.JsonException;
 import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
 import javax.json.JsonReader;
 import javax.json.JsonWriter;
 import javax.json.stream.JsonParser;
@@ -63,7 +64,7 @@ public class MessageImpl implements Message {
     
     public MessageImpl(FeedPath name, Instant timestamp, JsonObject headers, InputStream data, long length, boolean temporary) {
         this(
-            name.part.getId().orElseThrow(()->new RuntimeException("no message id in name")),
+            name == null ? null : name.part.getId().orElse(null),
             name,
             timestamp,
             headers,
@@ -78,9 +79,10 @@ public class MessageImpl implements Message {
     }
     
     private JsonObject getAllHeaders() {
-        return Json.createObjectBuilder()
-            .add("name", name.toString())
-            .add("timestamp", timestamp.toString())
+        JsonObjectBuilder builder = Json.createObjectBuilder();
+        if (name != null) builder = builder.add("name", name.toString());
+        if (timestamp != null) builder = builder.add("timestamp", timestamp.toString());
+        return builder
             .add("headers", headers)
             .add("length", getLength())
             .build();

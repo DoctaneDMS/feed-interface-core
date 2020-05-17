@@ -3,9 +3,13 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.softwareplumbers.feed;
+package com.softwareplumbers.feed.impl;
 
+import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedExceptions.InvalidJson;
+import com.softwareplumbers.feed.FeedPath;
+import com.softwareplumbers.feed.Message;
+import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.impl.MessageFactory;
 import static com.softwareplumbers.feed.test.TestUtils.asString;
 import java.io.ByteArrayInputStream;
