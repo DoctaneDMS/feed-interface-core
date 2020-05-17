@@ -157,12 +157,12 @@ public class FeedExceptions {
     
     @FunctionalInterface
     public static interface CheckedConsumer<T> {
-        void accept(T t) throws BaseException, IOException;
+        void accept(T t) throws Exception;
     }
 
     @FunctionalInterface
     public static interface CheckedBiConsumer<T,U> {
-        void accept(T t, U u) throws BaseException, IOException;
+        void accept(T t, U u) throws Exception;
     }
     
     public static BaseRuntimeException runtime(BaseException e) {
@@ -181,6 +181,8 @@ public class FeedExceptions {
                 throw runtime(e);
             } catch (IOException e) {
                 throw runtime(e);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         };
     }
@@ -193,6 +195,8 @@ public class FeedExceptions {
                 throw runtime(e);
             } catch (IOException e) {
                 throw runtime(e);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         };
     }  
