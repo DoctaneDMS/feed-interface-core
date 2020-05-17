@@ -20,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,6 +43,7 @@ import javax.json.Json;
 import javax.json.JsonObject;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.junit.Assert.fail;
 
 /**
  *
@@ -49,10 +51,15 @@ import static org.hamcrest.Matchers.empty;
  */
 public class TestUtils {
     
-    public static String asString(InputStream is) throws IOException {
+    public static String asString(InputStream is) {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        OutputStreamConsumer.of(()->is).consume(stream);
-        return stream.toString();
+        try {
+            OutputStreamConsumer.of(()->is).consume(stream);
+            return stream.toString();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+            
     }
 
     private static final String[] WORDS = new String[] { "sphagetti", "idle", "loves", "jane", "dog", "hair", "tantric", "slightly", "worm", "likely", "moves", "gets", "fast" };
@@ -77,6 +84,14 @@ public class TestUtils {
         return FEEDS[(int)(Math.random() * FEEDS.length)];
     }
     
+    public static String randomId() {
+        return UUID.randomUUID().toString();
+    }
+    
+    public static FeedPath randomMessagePath() {
+        return randomFeedPath().addId(randomId());
+    }
+    
     public static final MessageClock CLOCK = new MessageClock();
     
     public static Message generateMessage(FeedPath feed) {
@@ -87,7 +102,7 @@ public class TestUtils {
         Instant time = Instant.now(CLOCK);
         FeedPath id = feed.addId(UUID.randomUUID().toString());
         try {
-            return new MessageImpl(id, time, testHeaders, testData, false);
+            return new MessageImpl(id, time, testHeaders, testData, -1, false);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -227,4 +242,15 @@ public class TestUtils {
         }
         return results;
     }  
+    
+    public static Map<FeedPath, Message> generateBinaryMessageStream(int count, OutputStream bos) {
+        return generateMessages(count, 0, randomFeedPath(), msg-> { 
+            try {
+                msg.writeHeaders(bos);
+                msg.writeData(bos);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
 }

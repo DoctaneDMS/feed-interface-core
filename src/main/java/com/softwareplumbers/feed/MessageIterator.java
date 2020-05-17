@@ -26,7 +26,7 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
 
     private Runnable closeHandler;
     
-    private MessageIterator(Runnable closeHandler) {
+    public MessageIterator(Runnable closeHandler) {
         this.closeHandler = closeHandler;
     }
     
@@ -155,7 +155,7 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
 
         }       
     }
-    
+        
     /** Create a MessageIterator from another iterator, plus a handler to release resources.
      * 
      * @param messages Iterator over messages.

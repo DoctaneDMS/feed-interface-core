@@ -52,7 +52,7 @@ public class TestMessageBuffer {
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, time, testHeaders, testData, true);
+        Message message = new MessageImpl(id, time, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
@@ -65,7 +65,7 @@ public class TestMessageBuffer {
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, time, testHeaders, testData, true);
+        Message message = new MessageImpl(id, time, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
@@ -79,7 +79,7 @@ public class TestMessageBuffer {
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, time, testHeaders, testData, false);
+        Message message = new MessageImpl(id, time, testHeaders, testData, -1, false);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
@@ -128,30 +128,7 @@ public class TestMessageBuffer {
             assertEquals(79-i, newGet);
         }       
     }
-    
-    @Test 
-    public void testParseFromStream() throws IOException {
-        MessageFactory factory = new MessageFactory();
-        Message message = factory.build(FeedPath.ROOT.addId("test"), new ByteArrayInputStream("{ \"a\" : \"one\" }plus some more unstructured data".getBytes()));
-        assertEquals("one", message.getHeaders().getString("a"));
-        assertEquals(FeedPath.ROOT.addId("test"), message.getName());
-        assertThat(message.getTimestamp(), lessThanOrEqualTo(Instant.now()));
-        assertThat(asString(message.getData()), equalTo("plus some more unstructured data"));
-        assertThat(asString(message.getData()), equalTo("plus some more unstructured data"));
-    }
-    
-    @Test 
-    public void testParseTempFromStream() throws IOException {
-        MessageFactory factory = new MessageFactory();
-        Message message = factory.buildTemporary(FeedPath.ROOT.addId("test"), new ByteArrayInputStream("{ \"a\" : \"one\" }plus some more unstructured data".getBytes()));
-        assertEquals(FeedPath.ROOT.addId("test"), message.getName());
-        assertEquals("one", message.getHeaders().getString("a"));
-        assertThat(message.getTimestamp(), lessThanOrEqualTo(Instant.now()));
-        assertThat(asString(message.getData()), equalTo("plus some more unstructured data"));
-        //Can only use stream once
-        assertThat(asString(message.getData()), equalTo(""));
-    }    
-    
+        
     @Test
     public void testPoolGrowthAndDeallocation() throws IOException, InterruptedException {
         int messageSize = getAverageMessageSize();

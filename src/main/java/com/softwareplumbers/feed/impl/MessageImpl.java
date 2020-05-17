@@ -8,6 +8,7 @@ package com.softwareplumbers.feed.impl;
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,6 +24,7 @@ import javax.json.JsonException;
 import javax.json.JsonObject;
 import javax.json.JsonReader;
 import javax.json.JsonWriter;
+import javax.json.stream.JsonParser;
 
 /**
  *
@@ -48,13 +50,13 @@ public class MessageImpl implements Message {
         this.length = length;
     }
     
-    public MessageImpl(FeedPath name, Instant timestamp, JsonObject headers, InputStream data, boolean temporary) throws IOException {
+    public MessageImpl(FeedPath name, Instant timestamp, JsonObject headers, InputStream data, long length, boolean temporary) throws IOException {
         this(
             name.part.getId().orElseThrow(()->new RuntimeException("no message id in name")),
             name,
             timestamp,
             headers,
-            -1,
+            length,
             temporary ? ()->data : InputStreamSupplier.copy(()->data)
         );
     }
@@ -153,10 +155,12 @@ public class MessageImpl implements Message {
     }
     
     @Override
-    public InputStream getHeaderStream() throws IOException {
+    public InputStream getHeaderStream() {
         try (ByteArrayOutputStream byteStream = new ByteArrayOutputStream()) {
             writeHeaders(byteStream);
             return new ByteArrayInputStream(byteStream.toByteArray());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
     

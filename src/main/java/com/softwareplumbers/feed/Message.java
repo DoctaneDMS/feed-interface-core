@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import javax.json.JsonObject;
 
 /** Simple interface for messages.
@@ -41,6 +42,23 @@ public interface Message {
         public T recover(IOException e, InputStream is) throws IOException;
     }
     
+    public static JsonObject getHeaders(JsonObject obj) {
+        return obj.getJsonObject("headers");
+    }
+    
+    public static int getLength(JsonObject obj) {
+        return obj.getInt("length", -1);
+    }
+    
+    public static Optional<FeedPath> getName(JsonObject obj) {
+        if (obj.containsKey("name")) {
+            return Optional.of(FeedPath.valueOf(obj.getString("name")));
+        } else {
+            return Optional.empty();
+        }
+    }
+    
+    
     /** Get the headers of a message.
      * 
      * @return 
@@ -62,7 +80,7 @@ public interface Message {
      * @return
      * @throws IOException 
      */
-    public InputStream getHeaderStream() throws IOException;    
+    public InputStream getHeaderStream();    
     
     public FeedPath getName();
     public long getLength();
