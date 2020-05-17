@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import javax.json.JsonObject;
+import javax.json.JsonValue;
 
 /** Simple interface for messages.
  * 
@@ -45,7 +46,8 @@ public interface Message {
     }
     
     public static JsonObject getHeaders(JsonObject obj) {
-        return obj.getJsonObject("headers");
+        JsonObject headers = obj.getJsonObject("headers");
+        return (headers == null) ? JsonValue.EMPTY_JSON_OBJECT : headers;
     }
     
     public static int getLength(JsonObject obj) {

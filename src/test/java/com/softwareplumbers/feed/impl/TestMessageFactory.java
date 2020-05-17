@@ -10,7 +10,6 @@ import com.softwareplumbers.feed.FeedExceptions.InvalidJson;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
-import com.softwareplumbers.feed.impl.MessageFactory;
 import static com.softwareplumbers.feed.test.TestUtils.asString;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -24,10 +23,8 @@ import static com.softwareplumbers.feed.test.TestUtils.*;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import static org.hamcrest.Matchers.hasEntry;
-import static org.hamcrest.Matchers.hasKey;
-import static org.junit.Assert.fail;
+import javax.json.JsonValue;
+import static org.hamcrest.Matchers.*;
 import org.junit.Test;
 
 /**
@@ -59,6 +56,17 @@ public class TestMessageFactory {
         //Can only use stream once
         assertThat(asString(message.getData()), equalTo(""));
     }   
+
+    @Test 
+    public void testParseEmptyMessageFromStream() throws IOException, InvalidJson, FeedExceptions.StreamingException {
+        MessageFactory factory = new MessageFactory();
+        InputStream data = new ByteArrayInputStream("{}".getBytes());
+        Message message = factory.build(data, ()->FeedPath.ROOT.addId("test"), true).orElseThrow(()->new RuntimeException("no message"));
+        assertThat(message.getName(), equalTo(FeedPath.ROOT.addId("test")));
+        assertThat(message.getHeaders(), equalTo(JsonValue.EMPTY_JSON_OBJECT));
+        assertThat(message.getTimestamp(), lessThanOrEqualTo(Instant.now()));
+        assertThat(asString(message.getData()), equalTo(""));
+    } 
     
     @Test
     public void testIteratorFromStream() throws IOException, InvalidJson, FeedExceptions.StreamingException {
