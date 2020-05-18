@@ -10,6 +10,7 @@ import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
 import java.io.BufferedInputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
@@ -33,18 +34,23 @@ public class MessageFactory {
     
     public static final XLogger LOG = XLoggerFactory.getXLogger(MessageFactory.class);
     
-    private static class BoundedInputStream extends InputStream {
+    private static class SubStream extends FilterInputStream {
+        public SubStream(InputStream is) { super(is); }
+        @Override
+        public void close() { /* Don't close the stream  */ };
+    }
+    
+    private static class BoundedInputStream extends SubStream {
         
         private int bound;
-        private final InputStream parent;
         
-        public BoundedInputStream(InputStream parent, int bound) { this.parent = parent; this.bound = bound; }
+        public BoundedInputStream(InputStream in, int bound) { super(in); this.bound = bound; }
 
         @Override
         public int read() throws IOException {
             if (bound > 0) {
                 bound--;
-                return parent.read();
+                return in.read();
             } else {
                 return -1;
             }
@@ -55,7 +61,7 @@ public class MessageFactory {
             if (bound > 0) {
                 int advance = Math.min(len, bound);
                 bound -= advance;
-                return parent.read(buffer, pos, advance);
+                return in.read(buffer, pos, advance);
             } else {
                 return -1;
             }
@@ -109,7 +115,7 @@ public class MessageFactory {
         if (!data.markSupported()) throw new FeedExceptions.StreamingException("Mark not supported");
         data.mark(MAX_HEADER_SIZE);
         try {
-            try (JsonParser parser = Json.createParser(data)) {
+            try (JsonParser parser = Json.createParser(new SubStream(data))) {
                 if (parser.hasNext()) {
                     parser.next();
                     JsonObject result = parser.getObject();
