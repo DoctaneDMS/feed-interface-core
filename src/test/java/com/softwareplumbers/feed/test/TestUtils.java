@@ -79,6 +79,7 @@ public class TestUtils {
             builder.append(WORDS[(int)(Math.random() * WORDS.length)]);
             builder.append(" ");
         }
+        builder.append(count);
         return builder.toString();
     } 
     
@@ -201,6 +202,22 @@ public class TestUtils {
         Set<FeedPath> sentButNotReceived = new TreeSet<>(sent.keySet());
         sentButNotReceived.removeAll(received.keySet());      
         return sentButNotReceived;
+    }
+
+    public static int compare(Message a, Message b) {
+        int result = a.getFeedName().compareTo(b.getFeedName());
+        if (result != 0) return result;
+        result = a.getHeaders().toString().compareTo(b.getHeaders().toString());
+        if (result != 0) return result;
+        result = asString(a.getData()).compareTo(asString(b.getData()));
+        return result;
+    }
+    
+    public static Set<FeedPath> getDifferenceIgnoringId(Map<FeedPath,Message> sent, Map<FeedPath,Message> received) {
+        Map<Message, FeedPath> sentButNotReceived = new TreeMap<>(TestUtils::compare);
+        sent.forEach((k,v)->sentButNotReceived.put(v,k));
+        received.forEach((k,v)->sentButNotReceived.remove(v));
+        return new TreeSet(sentButNotReceived.values());
     }
     
     public static void assertMapsEqual(Map<FeedPath,Message> sent, Map<FeedPath,Message> received) {

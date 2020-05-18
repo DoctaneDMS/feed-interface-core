@@ -123,6 +123,11 @@ public class MessageImpl implements Message {
     public FeedPath getName() {
         return name;
     }
+    
+    @Override
+    public MessageImpl setName(FeedPath name) {
+        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, timestamp, headers, length, supplier);
+    }
 
     @Override
     public Instant getTimestamp() {

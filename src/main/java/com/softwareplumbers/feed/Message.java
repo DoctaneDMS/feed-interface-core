@@ -62,7 +62,6 @@ public interface Message {
         }
     }
     
-    
     /** Get the headers of a message.
      * 
      * @return 
@@ -87,6 +86,9 @@ public interface Message {
     public InputStream getHeaderStream();    
     
     public FeedPath getName();
+    
+    public Message setName(FeedPath name);
+    
     public long getLength();
     public Instant getTimestamp();
     public Message setTimestamp(Instant timestamp);   

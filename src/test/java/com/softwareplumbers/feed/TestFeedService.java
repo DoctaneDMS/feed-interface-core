@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
@@ -53,7 +54,8 @@ public class TestFeedService {
         FeedPath path = randomFeedPath();
         Instant start = Instant.now();
         Thread.sleep(10);
-        NavigableMap<FeedPath, Message> sentMessages = generateMessages(1000, 2, path, this::post); 
+        Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
+        generateMessages(1000, 2, path, this::post).forEach((k,v)->sentMessages.add(v));
         List<FeedPath> feeds = getFeeds();
         service.dumpState();
         assertThat(sentMessages.size(), equalTo(1000));
@@ -63,17 +65,9 @@ public class TestFeedService {
             while (messages.hasNext()) {
                 Message received = messages.next();
                 responseMessages.put(received.getName(), received);
-                assertThat(received.getName(), isIn(sentMessages.keySet()));
-                Message sent = sentMessages.get(received.getName());
-                assertThat(received, equalTo(sent));
-                assertThat(asString(received.getData()), equalTo(asString(sent.getData())));
+                assertThat(received, isIn(sentMessages));
                 count++;
             }
-        }
-        for (FeedPath message : sentMessages.keySet()) {
-            if (!responseMessages.containsKey(message))
-                System.out.println("missing: " + message);
-            //assertThat(message, isIn(responseMessages.keySet()));
         }
         assertThat(count, equalTo(1000));        
     }
@@ -132,7 +126,8 @@ public class TestFeedService {
 
             for (FeedPath feed : feeds) {
                 receivedMessages.get(feed).forEach(map->{
-                   assertMapsEqual(getMessagesForFeed(feed, sentMessages), map); 
+                   Set<FeedPath> dropped = getDifferenceIgnoringId(getMessagesForFeed(feed, sentMessages), map);
+                   assertThat(dropped, hasSize(0));
                 });
             }            
         } else {

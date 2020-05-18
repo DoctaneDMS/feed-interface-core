@@ -5,7 +5,6 @@
  */
 package com.softwareplumbers.feed.impl;
 
-import com.softwareplumbers.feed.Feed;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.FeedService;
@@ -14,11 +13,9 @@ import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.impl.buffer.BufferPool;
 import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
@@ -102,6 +99,7 @@ public abstract class AbstractFeedService implements FeedService {
     public Message post(FeedPath path, Message message) throws InvalidPath {
         LOG.entry(path, message);
         if (path.isEmpty() || path.part.getId().isPresent()) throw new InvalidPath(path);
+        message = message.setName(path.addId(getIdFromBackEnd()));
         MessageBuffer buffer = getOrCreateBuffer(path);
         return LOG.exit(buffer.addMessage(message));
     }
@@ -113,6 +111,7 @@ public abstract class AbstractFeedService implements FeedService {
         }
     }
     
+    protected abstract String getIdFromBackEnd();
     protected abstract MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to) throws InvalidPath;   
     protected abstract void startBackEndListener(FeedPath path, Instant from) throws InvalidPath;
 }

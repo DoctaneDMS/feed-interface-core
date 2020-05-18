@@ -107,6 +107,11 @@ public class BufferedMessageImpl implements Message {
     }
 
     @Override
+    public MessageImpl setName(FeedPath name) {
+        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, getTimestamp(), getHeaders(), getLength(), data);
+    }
+    
+    @Override
     public Instant getTimestamp() {
         return getAllHeaders().timestamp;
     }

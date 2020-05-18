@@ -5,13 +5,9 @@
  */
 package com.softwareplumbers.feed.test;
 
-import com.softwareplumbers.feed.Feed;
-import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.impl.AbstractFeedService;
-import com.softwareplumbers.feed.impl.FeedImpl;
-import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.UUID;
@@ -33,5 +29,10 @@ public class DummyFeedService extends AbstractFeedService {
 
     @Override
     protected void startBackEndListener(FeedPath path, Instant from) {
-    }    
+    }  
+    
+    @Override
+    protected String getIdFromBackEnd() {
+        return UUID.randomUUID().toString();
+    }
 }
