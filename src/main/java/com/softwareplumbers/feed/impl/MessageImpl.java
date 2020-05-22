@@ -64,7 +64,7 @@ public class MessageImpl implements Message {
     
     public MessageImpl(FeedPath name, Instant timestamp, JsonObject headers, InputStream data, long length, boolean temporary) {
         this(
-            name == null ? null : name.part.getId().orElse(null),
+            name == null || name.isEmpty() ? null : name.part.getId().orElse(null),
             name,
             timestamp,
             headers,
