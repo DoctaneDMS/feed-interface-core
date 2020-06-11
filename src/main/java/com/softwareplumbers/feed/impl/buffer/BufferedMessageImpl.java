@@ -26,11 +26,12 @@ import javax.json.stream.JsonParser;
  * @author jonathan
  */
 public class BufferedMessageImpl implements Message {
-    
+
     private static class Headers {
         final JsonObject headers;
         final FeedPath name;
         final Instant timestamp;
+        final String sender;
         final long length;
         
         public Headers(JsonObject allHeaders) {
@@ -38,6 +39,7 @@ public class BufferedMessageImpl implements Message {
             this.headers = allHeaders.getJsonObject("headers");
             this.name = FeedPath.valueOf(allHeaders.getString("name"));
             this.timestamp = Instant.parse(allHeaders.getString("timestamp"));
+            this.sender = Message.getSender(allHeaders);
         }
     }
     
@@ -89,7 +91,7 @@ public class BufferedMessageImpl implements Message {
     
     @Override
     public MessageImpl setData(InputStreamSupplier data, long length) {
-        return new MessageImpl(getId(), getName(), getTimestamp(), getHeaders(),length, data);
+        return new MessageImpl(getId(), getName(), getSender(), getTimestamp(), getHeaders(),length, data);
     }    
 
     @Override
@@ -108,9 +110,19 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public MessageImpl setName(FeedPath name) {
-        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, getTimestamp(), getHeaders(), getLength(), data);
+        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, getSender(), getTimestamp(), getHeaders(), getLength(), data);
     }
-    
+
+    @Override
+    public String getSender() {
+        return getAllHeaders().sender;
+    }
+
+    @Override
+    public Message setSender(String sender) {
+        return new MessageImpl(getId(), getName(), sender, getTimestamp(), getHeaders(), getLength(), data);
+    }
+        
     @Override
     public Instant getTimestamp() {
         return getAllHeaders().timestamp;
@@ -118,7 +130,7 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public Message setTimestamp(Instant timestamp) {
-        return new MessageImpl(getId(), getName(), timestamp, getHeaders(), getLength(), data);
+        return new MessageImpl(getId(), getName(), getSender(), timestamp, getHeaders(), getLength(), data);
     }
     
     @Override

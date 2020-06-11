@@ -54,6 +54,10 @@ public interface Message {
         return obj.getInt("length", -1);
     }
     
+    public static String getSender(JsonObject obj) {
+        return obj.getString("sender","");
+    }
+    
     public static Optional<FeedPath> getName(JsonObject obj) {
         if (obj.containsKey("name")) {
             return Optional.of(FeedPath.valueOf(obj.getString("name")));
@@ -91,7 +95,10 @@ public interface Message {
     
     public long getLength();
     public Instant getTimestamp();
-    public Message setTimestamp(Instant timestamp);   
+    public Message setTimestamp(Instant timestamp);  
+    
+    public String getSender();
+    public Message setSender(String sender);
     
     /** Get the id of the message.
      * 
@@ -156,6 +163,7 @@ public interface Message {
      */
     public static boolean equals(Message a, Message b) {
         return Objects.equals(a.getName(), b.getName())
+            && Objects.equals(a.getSender(), b.getSender())
             && Objects.equals(a.getHeaders(), b.getHeaders());
     }
 }

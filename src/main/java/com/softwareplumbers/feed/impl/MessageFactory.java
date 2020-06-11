@@ -158,10 +158,12 @@ public class MessageFactory {
             }
             
             FeedPath name = nameSupplier.isPresent() ? nameSupplier.get().get() : Message.getName(allHeaders.get()).orElse(FeedPath.ROOT);
+            String sender = Message.getSender(allHeaders.get());
 
             return Optional.of(
                 new MessageImpl(
                     name, 
+                    sender,
                     Instant.now(), 
                     Message.getHeaders(allHeaders.get()), 
                     data, 

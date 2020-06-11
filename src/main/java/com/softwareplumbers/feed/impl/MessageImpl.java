@@ -43,15 +43,17 @@ public class MessageImpl implements Message {
     private String id;
     private Instant timestamp;
     private InputStreamSupplier supplier;
+    private String sender;
     private long length;
     
-    public MessageImpl(String id, FeedPath name, Instant timestamp, JsonObject headers, long length, InputStreamSupplier supplier) {
+    public MessageImpl(String id, FeedPath name, String sender, Instant timestamp, JsonObject headers, long length, InputStreamSupplier supplier) {
         this.name = name;
         this.id = id;
         this.timestamp = timestamp;
         this.supplier = supplier;
         this.headers = headers;
         this.length = length;
+        this.sender = sender;
     }
     
     private static InputStreamSupplier supplierOf(InputStream data, boolean temporary) {
@@ -62,10 +64,11 @@ public class MessageImpl implements Message {
         }
     }
     
-    public MessageImpl(FeedPath name, Instant timestamp, JsonObject headers, InputStream data, long length, boolean temporary) {
+    public MessageImpl(FeedPath name, String sender, Instant timestamp, JsonObject headers, InputStream data, long length, boolean temporary) {
         this(
             name == null || name.isEmpty() ? null : name.part.getId().orElse(null),
             name,
+            sender,
             timestamp,
             headers,
             length,
@@ -82,6 +85,8 @@ public class MessageImpl implements Message {
         JsonObjectBuilder builder = Json.createObjectBuilder();
         if (name != null) builder = builder.add("name", name.toString());
         if (timestamp != null) builder = builder.add("timestamp", timestamp.toString());
+        if (sender != null) builder = builder.add("sender", sender);
+
         return builder
             .add("headers", headers)
             .add("length", getLength())
@@ -98,7 +103,7 @@ public class MessageImpl implements Message {
     } 
     
     public MessageImpl setData(InputStreamSupplier data, long length) {
-        return new MessageImpl(id, name, timestamp, headers,length, data);
+        return new MessageImpl(id, name, sender, timestamp, headers,length, data);
     }
     
     @Override
@@ -126,7 +131,7 @@ public class MessageImpl implements Message {
     
     @Override
     public MessageImpl setName(FeedPath name) {
-        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, timestamp, headers, length, supplier);
+        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, sender, timestamp, headers, length, supplier);
     }
 
     @Override
@@ -136,9 +141,19 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setTimestamp(Instant timestamp) {
-        return new MessageImpl(id, name, timestamp, headers, length, supplier);
+        return new MessageImpl(id, name, sender, timestamp, headers, length, supplier);
     }
-
+    
+    @Override
+    public String getSender() {
+        return sender;
+    }
+    
+    @Override
+    public Message setSender(String sender) {
+        return new MessageImpl(id, name, sender, timestamp, headers, length, supplier);
+    }
+    
     @Override
     public String getId() {
         return id;

@@ -52,11 +52,12 @@ public class TestMessageBuffer {
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, time, testHeaders, testData, -1, true);
+        Message message = new MessageImpl(id, "testuser", time, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
-        assertEquals("abc123", asString(message.getData()));        
+        assertEquals("abc123", asString(message.getData()));   
+        assertEquals("testuser", message.getSender());
     }
 
     @Test
@@ -65,12 +66,13 @@ public class TestMessageBuffer {
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, time, testHeaders, testData, -1, true);
+        Message message = new MessageImpl(id, "testuser", time, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
         assertEquals("abc123", asString(message.getData()));
         assertEquals(-1, message.getData().read());
+        assertEquals("testuser", message.getSender());
     }
 
     @Test
@@ -79,12 +81,13 @@ public class TestMessageBuffer {
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, time, testHeaders, testData, -1, false);
+        Message message = new MessageImpl(id, "testuser", time, testHeaders, testData, -1, false);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
         assertEquals("abc123", asString(message.getData()));
         assertEquals("abc123", asString(message.getData()));
+        assertEquals("testuser", message.getSender());
     }
     
     @Test
