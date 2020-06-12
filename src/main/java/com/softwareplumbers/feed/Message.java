@@ -10,6 +10,7 @@ import com.softwareplumbers.feed.FeedExceptions.StreamingException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.SequenceInputStream;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -169,5 +170,13 @@ public interface Message {
         return Objects.equals(a.getName(), b.getName())
             && Objects.equals(a.getSender(), b.getSender())
             && Objects.equals(a.getHeaders(), b.getHeaders());
+    }
+    
+    /** Get entire message (headers and data) as a stream
+     * 
+     * @return an input stream encoding the entire message. 
+     */
+    public default InputStream toStream() {
+        return new SequenceInputStream(getHeaderStream(), getData());
     }
 }
