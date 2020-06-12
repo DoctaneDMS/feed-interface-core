@@ -252,11 +252,10 @@ public class TestUtils {
         long createCount = receivers.getCount();
         for (long i = 0; i < createCount; ) {
             for (int j = 0; i < createCount && j < feeds.size(); j++, i++) {
-                List<Map<FeedPath,Message>> result = new ArrayList<>();
-                results.put(feeds.get(j), result);
-                    Map<FeedPath,Message> resultMap = new ConcurrentSkipListMap<>();
-                    TestUtils.createReceiver(service, count, feeds.get(j), from, resultMap, receivers);
-                    result.add(resultMap);           
+                List<Map<FeedPath,Message>> result = results.computeIfAbsent(feeds.get(j), fm->new ArrayList<>());
+                Map<FeedPath,Message> resultMap = new ConcurrentSkipListMap<>();
+                TestUtils.createReceiver(service, count, feeds.get(j), from, resultMap, receivers);
+                result.add(resultMap);           
             }
         }
         return results;
