@@ -132,7 +132,9 @@ public class TestFeedService {
             }            
         } else {
             System.out.println("receiverCount " + receiverCount.getCount());
-            System.out.println("receivedMessages " + receivedMessages.size());
+            for (FeedPath feed : receivedMessages.keySet()) {
+                System.out.println("received " + receivedMessages.get(feed).size() + " messages for " + feed);
+            }
             fail("timed out");
         }
  
