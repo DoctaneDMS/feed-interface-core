@@ -174,10 +174,14 @@ public class TestUtils {
         return messages->{
             int remaining = count;
             Message current = null;
-            while (messages.hasNext()) {
-                current = messages.next();
-                results.put(current.getName(), current);
-                remaining--;
+            try {
+                while (messages.hasNext()) {
+                    current = messages.next();
+                    results.put(current.getName(), current);
+                    remaining--;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
             if (remaining > 0) 
                 target.accept(current.getTimestamp(), createConsumer(remaining, results, completeCount, target));
