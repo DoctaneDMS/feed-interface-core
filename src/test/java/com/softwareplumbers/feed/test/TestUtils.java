@@ -129,18 +129,17 @@ public class TestUtils {
         }
     }
     
-    public static NavigableMap<FeedPath,Message> generateMessages(int count, int maxPause, FeedPath path, Consumer<Message> messageConsumer) {
+    public static NavigableMap<FeedPath,Message> generateMessages(int count, int maxPause, FeedPath path, Function<Message, Message> messageConsumer) {
         NavigableMap<FeedPath,Message> result = new TreeMap<>();
         for (int i = 0; i < count; i++) {
             Message message = generateMessage(path);
-            result.put(message.getName(), message);
-            messageConsumer.accept(message);
+            result.put(message.getName(), messageConsumer.apply(message));
             randomPause(maxPause);
         }
         return result;
     }
     
-    public static NavigableMap<FeedPath,Message> generateMessages(int threads, int count, int maxPause, List<FeedPath> feeds, Consumer<Message> messageConsumer) {
+    public static NavigableMap<FeedPath,Message> generateMessages(int threads, int count, int maxPause, List<FeedPath> feeds, Function<Message, Message> messageConsumer) {
         ConcurrentSkipListMap<FeedPath,Message> result = new ConcurrentSkipListMap<>();
         for (int i = 0; i < threads; ) {
             for (int j = 0; j < feeds.size() && i < threads; j++, i++) {
@@ -148,8 +147,7 @@ public class TestUtils {
                 new Thread(() -> {
                     for (int k = 0; k < count; k++) {
                         Message message = generateMessage(feed);
-                        result.put(message.getName(), message);
-                        messageConsumer.accept(message);
+                        result.put(message.getName(), messageConsumer.apply(message));
                         randomPause(maxPause);
                     }
                 }).start();
@@ -266,6 +264,7 @@ public class TestUtils {
             try {
                 msg.writeHeaders(bos);
                 msg.writeData(bos);
+                return msg;
             } catch (StreamingException e) {
                 throw runtime(e);
             }

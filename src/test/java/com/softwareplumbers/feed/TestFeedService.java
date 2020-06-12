@@ -41,9 +41,9 @@ public class TestFeedService {
     @Autowired
     FeedService service;
     
-    public void post(Message message) {
+    public Message post(Message message) {
         try {
-            service.post(message.getFeedName(), message);
+            return service.post(message.getFeedName(), message);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -99,7 +99,7 @@ public class TestFeedService {
     public void testMessagesForFeed() throws InterruptedException {
         //more of a test-of-test fixture 
         CountDownLatch latch = new CountDownLatch(800);
-        NavigableMap<FeedPath, Message> sentMessages = generateMessages(4, 200, 2, getFeeds(), m->latch.countDown());
+        NavigableMap<FeedPath, Message> sentMessages = generateMessages(4, 200, 2, getFeeds(), m->{ latch.countDown(); return m; });
         assertThat(latch.await(10, TimeUnit.SECONDS), equalTo(true));
         assertThat(sentMessages.size(), equalTo(800));
         assertThat(getMessagesForFeed(getFeeds().get(0), sentMessages).size(), equalTo(200));
