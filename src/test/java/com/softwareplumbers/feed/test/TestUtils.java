@@ -79,7 +79,7 @@ public class TestUtils {
             builder.append(WORDS[(int)(Math.random() * WORDS.length)]);
             builder.append(" ");
         }
-        builder.append(count);
+        builder.append((int)(Math.random() * 100));
         return builder.toString();
     } 
     
