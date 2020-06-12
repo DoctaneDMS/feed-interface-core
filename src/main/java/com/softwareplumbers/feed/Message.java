@@ -55,8 +55,17 @@ public interface Message {
         return obj.getInt("length", -1);
     }
     
-    public static String getSender(JsonObject obj) {
-        return obj.getString("sender","");
+    public static Optional<String> getSender(JsonObject obj) {
+        if (obj.containsKey("sender"))
+            return Optional.of(obj.getString("sender"));
+        else
+            return Optional.empty();
+    }
+    
+    public static Optional<Instant> getTimestamp(JsonObject obj) {
+        if (obj.containsKey("timestamp"))
+            return Optional.of(Instant.parse(obj.getString("timestamp")));
+        return Optional.empty();
     }
     
     public static Optional<FeedPath> getName(JsonObject obj) {
@@ -83,7 +92,7 @@ public interface Message {
     /** Convert the message headers to a binary stream.
      * 
      * The returned stream has a Json part (which consists of the Json object
-     * { name: *name*, timestamp: *timestamp*, headers: *headers*, length: *length* }
+     * { name: *name*, sender: *sender*, timestamp: *timestamp*, headers: *headers*, length: *length* }
      * 
      * @return
      * @throws IOException 

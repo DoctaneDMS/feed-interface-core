@@ -38,8 +38,8 @@ public class BufferedMessageImpl implements Message {
             this.length = allHeaders.getJsonNumber("length").longValueExact();
             this.headers = allHeaders.getJsonObject("headers");
             this.name = FeedPath.valueOf(allHeaders.getString("name"));
-            this.timestamp = Instant.parse(allHeaders.getString("timestamp"));
-            this.sender = Message.getSender(allHeaders);
+            this.timestamp = Message.getTimestamp(allHeaders).orElse(Instant.now());
+            this.sender = Message.getSender(allHeaders).orElse(null);
         }
     }
     
