@@ -57,7 +57,7 @@ public class TestFeedService {
         Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
         generateMessages(1000, 2, path, this::post).forEach((k,v)->sentMessages.add(v));
         List<FeedPath> feeds = getFeeds();
-        service.dumpState();
+        //service.dumpState();
         assertThat(sentMessages.size(), equalTo(1000));
         TreeMap<FeedPath, Message> responseMessages = new TreeMap<>();
         int count = 0;
