@@ -1,12 +1,6 @@
-///*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package com.softwareplumbers.feed;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -141,17 +135,21 @@ public class FeedExceptions {
         }
     }
     
-    public static BaseException build(JsonObject json) throws InvalidJson {
+    public static BaseException build(JsonObject json) {
+        try {
         Type type = BaseException.getType(json).orElseThrow(()->new InvalidJson("missing type", json));
-        switch(type) {
-            case INVALID_PATH:
-                return new InvalidPath(InvalidPath.getPath(json).orElseThrow(()->new InvalidJson("missing path", json)));
-            case INVALID_JSON:
-                return new InvalidJson(InvalidJson.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)), InvalidJson.getJson(json));
-            case STREAMING_EXCEPTION:
-                return new StreamingException(StreamingException.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)));
-            default:
-                throw new InvalidJson("invalid type value", json);
+            switch(type) {
+                case INVALID_PATH:
+                    return new InvalidPath(InvalidPath.getPath(json).orElseThrow(()->new InvalidJson("missing path", json)));
+                case INVALID_JSON:
+                    return new InvalidJson(InvalidJson.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)), InvalidJson.getJson(json));
+                case STREAMING_EXCEPTION:
+                    return new StreamingException(StreamingException.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)));
+                default:
+                    throw new InvalidJson("invalid type value", json);
+            }
+        } catch (InvalidJson e) {
+            throw runtime(e);
         }
     }
 
@@ -159,11 +157,11 @@ public class FeedExceptions {
     public static class RemoteException extends BaseRuntimeException {
         
         public RemoteException(JsonObject message) {
-            super(message.getString("error", "Remote Exception"), buildException(message));
+            super(build(message));
         }
         
         public RemoteException(BaseException remoteException) {
-            super("Remote Exception", remoteException);
+            super(remoteException);
         }
         
         /** This method allows us to rethrow selected remote exceptions as local exceptions.
