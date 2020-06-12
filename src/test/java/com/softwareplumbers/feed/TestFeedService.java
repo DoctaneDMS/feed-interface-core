@@ -131,6 +131,8 @@ public class TestFeedService {
                 });
             }            
         } else {
+            System.out.println("receiverCount " + receiverCount.getCount());
+            System.out.println("receivedMessages " + receivedMessages.size());
             fail("timed out");
         }
  
