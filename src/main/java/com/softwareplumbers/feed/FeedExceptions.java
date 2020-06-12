@@ -176,6 +176,13 @@ public class FeedExceptions {
         }
     }
     
+    /** Server errors represent unexpected or unknown errors raised by a remote system */
+    public static class ServerError extends BaseException {
+        public ServerError(String message) {
+            super(null, message);
+        }
+    }
+    
     @FunctionalInterface
     public static interface CheckedConsumer<T> {
         void accept(T t) throws Exception;
