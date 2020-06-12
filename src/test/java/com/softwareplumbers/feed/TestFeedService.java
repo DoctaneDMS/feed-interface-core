@@ -137,7 +137,11 @@ public class TestFeedService {
                 for (int i = 0; i < receivers.size(); i++) {
                     Map<FeedPath, Message> map = receivers.get(i);
                     System.out.println("receiver " + i + " has " + map.size() + " messages for " + feed);
-                    Set<FeedPath> dropped = getDifferenceIgnoringId(getMessagesForFeed(feed, sentMessages), map);                   
+                    Map<FeedPath, Message> sent = getMessagesForFeed(feed, sentMessages);
+                    Set<FeedPath> dropped = getDifferenceIgnoringId(sent, map);
+                    for (FeedPath path : dropped) {
+                        System.out.println("lost message " + path + "[" + sent.get(path) + "]");
+                    }
                 }
             }
             fail("timed out");
