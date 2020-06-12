@@ -33,6 +33,12 @@ public interface FeedService {
      */
     void listen(FeedPath path, Instant after, Consumer<MessageIterator> messageConsumer) throws InvalidPath;
     
+    /** Cancel a listener for messages on a given path.
+     * 
+     * @param path The path for which we want to cancel a listener.
+     * @param messageConsumer the specific listener to invalidate
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
+     */
     void cancelCallback(FeedPath path, Consumer<MessageIterator> messageConsumer) throws InvalidPath;
     
     /** Get messages synchronously.
@@ -57,5 +63,7 @@ public interface FeedService {
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
     Message post(FeedPath path, Message message) throws InvalidPath;
+    
+    /** Utility function to dump information about message buffers */
     void dumpState();
 }

@@ -20,7 +20,11 @@ import java.util.function.Consumer;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
 
-/**
+/** Implements a basic feed service on top of some other data store.
+ * 
+ * Uses the MessageBuffer class to implement a circular buffer for messages;
+ * abstract methods must be implemented to connect this buffer to a back end
+ * message store.
  *
  * @author jonathan
  */
@@ -36,6 +40,11 @@ public abstract class AbstractFeedService implements FeedService {
         public boolean value = false;
     }
     
+    /** Create a new Abstract Feed Service.
+     * 
+     * @param poolSize Amount of memory in bytes to dedicate to all message buffers
+     * @param bucketSize Size of a bucket - should be larger than the expected maximum message size
+     */
     public AbstractFeedService(long poolSize, int bucketSize) {
         this.bufferPool = new BufferPool((int)poolSize);
         this.bucketSize = bucketSize; 

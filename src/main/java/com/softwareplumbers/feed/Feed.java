@@ -26,6 +26,14 @@ public interface Feed {
      */
     String getId();
     
+    /** Convenience method for receiving messages related to this feed.
+     * 
+     * Should be the same as calling service.listen(this.getName(), from, callback)
+     * 
+     * @param service Service from which to receive messages
+     * @param from Timestamp after which we are interested in messages
+     * @param callback Callback function which will receive messages
+     */
     default void listen(FeedService service, Instant from, Consumer<MessageIterator> callback) {
         try {
             service.listen(getName(), from, callback);

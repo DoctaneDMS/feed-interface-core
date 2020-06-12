@@ -36,7 +36,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
      */
     public abstract static class Element implements Comparable<Element> {
         
-        /** The type of an element in the feed path.
+        /** Represents the different types of an element in the feed path.
          * 
          */
         public enum Type {
@@ -45,10 +45,14 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
             MESSAGEID
         }
         
+        /** The type of this particlar element */
         public final Type type;
         
+        /** Get the name of this element, if it has one */
         public Optional<String> getName() { return Optional.empty(); }
+        /** Get the version of this element, if it has one */
         public Optional<String> getVersion()  { return Optional.empty(); }
+        /** Get the id of this element, if it has one */
         public Optional<String> getId()  { return Optional.empty(); }
         
         public Element(Type type) { this.type = type; }
@@ -158,6 +162,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         }
     }
     
+    /** An empty feed path */
     public static final FeedPath ROOT = new FeedPath(null, null) {
         @Override
         public boolean isEmpty() { return true; }
@@ -247,6 +252,14 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         return fp.isEmpty() ? this : fp; 
     }
     
+    /** Convert a string into a feed path.
+     * 
+     * Paths are of the form ~feedid/feed/feed/~messageid where
+     * the feedid and messageid components are optional and as many feed
+     * names as desired can be added to the hierarchy.     * 
+     * @param path String to convert into a feed path
+     * @return The feed path.
+     */
     public static FeedPath valueOf(String path) {
         FeedPath result = ROOT;
         Iterable<String> elements = split(path, "/")::iterator;

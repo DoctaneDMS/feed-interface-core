@@ -121,12 +121,16 @@ public interface Message {
     }
     
 
-    
+    /** Write message headers to an output stream
+     * 
+     * @param os
+     * @throws com.softwareplumbers.feed.FeedExceptions.StreamingException 
+     */
     public void writeHeaders(OutputStream os) throws StreamingException;
     
     /** Write to output stream with optional error callback.
      * 
-     * Writes data as defined in toStream() above.
+     * Writes message data to an output stream.
      * 
      * A fairly standard function to write a message to an output stream, with one wrinkle -
      * because a message can be transient (i.e. have a data stream that can only be used once)

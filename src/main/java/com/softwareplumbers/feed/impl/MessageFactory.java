@@ -26,9 +26,9 @@ import javax.json.stream.JsonParser;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
 
-/**
+/** Creates messages.
  *
- * @author jonathan
+ * @author Jonathan Essex
  */
 public class MessageFactory {
     
@@ -109,8 +109,19 @@ public class MessageFactory {
         
     }
     
+    /** Default maximum size of the Json message header */
     public static final int MAX_HEADER_SIZE = 10000;
     
+    /** Parse message headers from an input stream.
+     * 
+     * The input stream is not closed and after reading the header and the stream
+     * should be positioned immediately after the closing } of the header object.
+     * 
+     * @param data
+     * @return The json header, if one can be read. Empty if stream is ended.
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidJson
+     * @throws com.softwareplumbers.feed.FeedExceptions.StreamingException 
+     */
     public static Optional<JsonObject> parseHeaders(InputStream data) throws FeedExceptions.InvalidJson, FeedExceptions.StreamingException {
         if (!data.markSupported()) throw new FeedExceptions.StreamingException("Mark not supported");
         data.mark(MAX_HEADER_SIZE);
@@ -143,7 +154,15 @@ public class MessageFactory {
         }
     }
     
-    
+    /** Build a message from the given input stream.
+     * 
+     * @param data Input stream with header an binary data
+     * @param nameSupplier Supplier of names for the parsed messages. This will override any names in the message headers.
+     * @param temporary True if the message is only expected to be used once.
+     * @return A message object.
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidJson
+     * @throws com.softwareplumbers.feed.FeedExceptions.StreamingException 
+     */
     private Optional<Message> build(InputStream data, Optional<Supplier<FeedPath>> nameSupplier, boolean temporary) throws FeedExceptions.InvalidJson, FeedExceptions.StreamingException {
         if (!data.markSupported()) {
             data = new BufferedInputStream(data);
