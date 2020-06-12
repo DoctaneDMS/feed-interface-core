@@ -121,7 +121,7 @@ public class TestFeedService {
         CountDownLatch receiverCount = new CountDownLatch(8);
         Map<FeedPath, List<Map<FeedPath,Message>>> receivedMessages = createReceivers(receiverCount, service, feeds, start, 40);
         
-        if (receiverCount.await(2, TimeUnit.MINUTES)) {
+        if (receiverCount.await(30, TimeUnit.SECONDS)) {
             assertThat(receivedMessages.size(), equalTo(feeds.size()));  
 
             for (FeedPath feed : feeds) {
@@ -135,7 +135,9 @@ public class TestFeedService {
             for (FeedPath feed : receivedMessages.keySet()) {
                 List<Map<FeedPath,Message>> receivers = receivedMessages.get(feed);
                 for (int i = 0; i < receivers.size(); i++) {
-                    System.out.println("receiver " + i + " has " + receivers.get(i).size() + " messages for " + feed);
+                    Map<FeedPath, Message> map = receivers.get(i);
+                    System.out.println("receiver " + i + " has " + map.size() + " messages for " + feed);
+                    Set<FeedPath> dropped = getDifferenceIgnoringId(getMessagesForFeed(feed, sentMessages), map);                   
                 }
             }
             fail("timed out");
