@@ -208,7 +208,7 @@ public class MessageFactory {
         while ((message = build(data, names, false)).isPresent()) messageConsumer.accept(message.get());
     }
     
-    public MessageIterator buildIterator(InputStream data, Optional<Supplier<FeedPath>> names) throws FeedExceptions.InvalidJson, FeedExceptions.StreamingException  {
+    public MessageIterator buildIterator(InputStream data, Optional<Supplier<FeedPath>> names) {
         return new StreamIterator(data, names);
     }
         

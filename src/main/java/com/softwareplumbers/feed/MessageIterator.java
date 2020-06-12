@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import com.softwareplumbers.feed.FeedExceptions.BaseRuntimeException;
 import java.util.Iterator;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -84,6 +85,25 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
         public Message next() {
             return base.next();
         }  
+    }
+    
+    private static class DeferredError extends MessageIterator {
+        private final BaseRuntimeException error;
+        
+        public DeferredError(BaseRuntimeException error) {
+            super(()->{});
+            this.error = error;
+        }
+        
+        @Override
+        public boolean hasNext() {
+            throw error;
+        }
+        
+        @Override 
+        public Message next() {
+            throw error;
+        }
     }
 
     private static class Chained extends Delegator {
@@ -194,6 +214,10 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
      */
     public static MessageIterator of(MessageIterator... iterators) {
         return new Sequence(iterators);
+    }
+    
+    public static MessageIterator defer(BaseRuntimeException error) {
+        return new DeferredError(error);
     }
         
 }
