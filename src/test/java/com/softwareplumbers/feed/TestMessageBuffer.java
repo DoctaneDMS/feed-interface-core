@@ -184,7 +184,7 @@ public class TestMessageBuffer {
         Map<FeedPath,Message> generated = generateMessages(5, 20, 5, Collections.singletonList(randomFeedPath()), message->buffer.addMessage(message));         
         Map<FeedPath,Message> results = new TreeMap<>();
         CountDownLatch receiving = new CountDownLatch(1);
-        createReceiver(buffer, 100, start, results, receiving);
+        createReceiver(1, buffer, 100, start, results, receiving);
         if (receiving.await(20, TimeUnit.SECONDS)) {
             assertMapsEqual(generated, results);
         } else {
