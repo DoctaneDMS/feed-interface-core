@@ -176,7 +176,7 @@ public class TestUtils {
                 while (messages.hasNext()) {
                     current = messages.next();
                     results.put(current.getName(), current);
-                    System.out.println("consumer:" + id + "munched: " + current.getName());
+                    System.out.println("consumer:" + id + " munched: " + current.getName());
                     remaining--;
                 }
             } catch (Exception e) {
@@ -250,11 +250,11 @@ public class TestUtils {
     public static Map<FeedPath,List<Map<FeedPath,Message>>> createReceivers(CountDownLatch receivers, FeedService service, List<FeedPath> feeds, Instant from, int count) {
         Map<FeedPath,List<Map<FeedPath,Message>>> results = new TreeMap<>();
         long createCount = receivers.getCount();
-        for (long i = 0; i < createCount; ) {
+        for (int i = 0; i < createCount; ) {
             for (int j = 0; i < createCount && j < feeds.size(); j++, i++) {
                 List<Map<FeedPath,Message>> result = results.computeIfAbsent(feeds.get(j), fm->new ArrayList<>());
                 Map<FeedPath,Message> resultMap = new ConcurrentSkipListMap<>();
-                TestUtils.createReceiver(j, service, count, feeds.get(j), from, resultMap, receivers);
+                TestUtils.createReceiver(i, service, count, feeds.get(j), from, resultMap, receivers);
                 result.add(resultMap);           
             }
         }
