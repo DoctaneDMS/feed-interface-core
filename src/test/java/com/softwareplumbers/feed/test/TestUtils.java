@@ -176,7 +176,7 @@ public class TestUtils {
                 while (messages.hasNext()) {
                     current = messages.next();
                     results.put(current.getName(), current);
-                    System.out.println("consumer:" + id + " munched: " + current.getName());
+                    System.out.println("consumer:" + id + " munched: " + current.getName() + " - " + current.getTimestamp());
                     remaining--;
                 }
             } catch (Exception e) {
