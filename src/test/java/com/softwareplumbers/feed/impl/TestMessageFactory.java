@@ -39,7 +39,7 @@ public class TestMessageFactory {
         InputStream data = new ByteArrayInputStream("{ \"headers\": { \"a\" : \"one\" } }plus some more unstructured data".getBytes());
         Message message = factory.build(data, ()->FeedPath.ROOT.addId("test"), false).orElseThrow(()->new RuntimeException("no message"));
         assertEquals(FeedPath.ROOT.addId("test"), message.getName());
-        assertThat(message.getTimestamp(), lessThanOrEqualTo(Instant.now()));
+        assertThat(message.getTimestamp(), nullValue());
         assertThat(asString(message.getData()), equalTo("plus some more unstructured data"));
         assertThat(asString(message.getData()), equalTo("plus some more unstructured data"));
     }
@@ -51,7 +51,7 @@ public class TestMessageFactory {
         Message message = factory.build(data, ()->FeedPath.ROOT.addId("test"), true).orElseThrow(()->new RuntimeException("no message"));
         assertEquals(FeedPath.ROOT.addId("test"), message.getName());
         assertEquals("one", message.getHeaders().getString("a"));
-        assertThat(message.getTimestamp(), lessThanOrEqualTo(Instant.now()));
+        assertThat(message.getTimestamp(), nullValue());
         assertThat(asString(message.getData()), equalTo("plus some more unstructured data"));
         //Can only use stream once
         assertThat(asString(message.getData()), equalTo(""));
@@ -64,7 +64,7 @@ public class TestMessageFactory {
         Message message = factory.build(data, ()->FeedPath.ROOT.addId("test"), true).orElseThrow(()->new RuntimeException("no message"));
         assertThat(message.getName(), equalTo(FeedPath.ROOT.addId("test")));
         assertThat(message.getHeaders(), equalTo(JsonValue.EMPTY_JSON_OBJECT));
-        assertThat(message.getTimestamp(), lessThanOrEqualTo(Instant.now()));
+        assertThat(message.getTimestamp(), nullValue());
         assertThat(asString(message.getData()), equalTo(""));
     } 
     
