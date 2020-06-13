@@ -101,6 +101,9 @@ public class TestFeedService {
         CountDownLatch latch = new CountDownLatch(800);
         NavigableMap<FeedPath, Message> sentMessages = generateMessages(4, 200, 2, getFeeds(), m->{ latch.countDown(); return m; });
         assertThat(latch.await(20, TimeUnit.SECONDS), equalTo(true));
+         // necessary because the latch countdown happens before the message is added to the send message map.
+         // this isn't the idea solution but it's only test code.
+        Thread.sleep(10);
         assertThat(sentMessages.size(), equalTo(800));
         assertThat(getMessagesForFeed(getFeeds().get(0), sentMessages).size(), equalTo(200));
         assertThat(getMessagesForFeed(getFeeds().get(1), sentMessages).size(), equalTo(200));
