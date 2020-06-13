@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Configuration;
 public class LocalConfig {
     
     @Bean
-    FeedService feedservice() {
+    FeedService testService() {
         return new DummyFeedService(100000, 2000);
     }
     

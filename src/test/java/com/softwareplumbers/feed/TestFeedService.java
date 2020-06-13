@@ -29,6 +29,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.fail;
 import org.junit.Test;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 /**
  *
@@ -38,7 +39,7 @@ import org.junit.Test;
 @ContextConfiguration(classes = { LocalConfig.class })
 public class TestFeedService {
 
-    @Autowired
+    @Autowired @Qualifier(value="testService")
     FeedService service;
     
     public Message post(Message message) {
