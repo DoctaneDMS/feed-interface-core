@@ -100,7 +100,7 @@ public class TestFeedService {
         //more of a test-of-test fixture 
         CountDownLatch latch = new CountDownLatch(800);
         NavigableMap<FeedPath, Message> sentMessages = generateMessages(4, 200, 2, getFeeds(), m->{ latch.countDown(); return m; });
-        assertThat(latch.await(10, TimeUnit.SECONDS), equalTo(true));
+        assertThat(latch.await(20, TimeUnit.SECONDS), equalTo(true));
         assertThat(sentMessages.size(), equalTo(800));
         assertThat(getMessagesForFeed(getFeeds().get(0), sentMessages).size(), equalTo(200));
         assertThat(getMessagesForFeed(getFeeds().get(1), sentMessages).size(), equalTo(200));
@@ -121,7 +121,7 @@ public class TestFeedService {
         CountDownLatch receiverCount = new CountDownLatch(8);
         Map<FeedPath, List<Map<FeedPath,Message>>> receivedMessages = createReceivers(receiverCount, service, feeds, start, 40);
         
-        if (receiverCount.await(30, TimeUnit.SECONDS)) {
+        if (receiverCount.await(60, TimeUnit.SECONDS)) {
             assertThat(receivedMessages.size(), equalTo(feeds.size()));  
 
             for (FeedPath feed : feeds) {
