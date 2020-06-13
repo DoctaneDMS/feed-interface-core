@@ -40,7 +40,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 public class TestFeedService {
 
     @Autowired @Qualifier(value="testService")
-    FeedService service;
+    protected FeedService service;
     
     public Message post(Message message) {
         try {
