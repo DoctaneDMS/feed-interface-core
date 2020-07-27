@@ -213,6 +213,9 @@ public class MessageImpl implements Message {
     
     @Override
     public String toString() {
-        return "MessageImpl[" + getAllHeaders() + "]";
+        if (supplier.isPersistent())
+            return "MessageImpl[" + getAllHeaders() + "]";
+        else
+            return "MessageImpl[" + getHeaders() + "]";
     }
 }
