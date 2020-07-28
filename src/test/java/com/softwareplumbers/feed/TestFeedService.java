@@ -137,6 +137,7 @@ public class TestFeedService {
         } else {
             System.out.println("receiverCount " + receiverCount.getCount());
             for (FeedPath feed : receivedMessages.keySet()) {
+                dumpThreads();
                 List<Map<FeedPath,Message>> receivers = receivedMessages.get(feed);
                 for (int i = 0; i < receivers.size(); i++) {
                     Map<FeedPath, Message> map = receivers.get(i);

@@ -276,4 +276,21 @@ public class TestUtils {
             }
         });
     }
+    
+    public static void dumpThreads() {
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            LOG.debug("\"{}\" {} prio={} tid={} {}", 
+                thread.getName(),
+                (thread.isDaemon() ? "daemon" : ""),
+                thread.getPriority(),
+                thread.getId(),
+                Thread.State.WAITING.equals(thread.getState()) ? "in Object.wait()" : thread.getState().name().toLowerCase()
+            );
+            LOG.debug("java.lang.Thread.State: {}",
+                thread.getState().equals(Thread.State.WAITING) ? "WAITING (on object monitor)" : thread.getState()
+            );
+            for (StackTraceElement element: thread.getStackTrace())
+                LOG.debug("{}", element);
+        }
+    }
 }
