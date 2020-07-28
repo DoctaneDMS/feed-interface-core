@@ -186,10 +186,16 @@ public class TestUtils {
             } catch (Exception e) {
                 LOG.error("Error consuming message", e);
             }
-            if (remaining > 0) 
-                target.accept(current.getTimestamp(), createConsumer(id, remaining, results, completeCount, target));
-            else 
-                completeCount.countDown();                
+            if (current == null) {
+                LOG.error("createConsumer called with no messages or failed before any message retrieved - aborting");
+                completeCount.countDown();
+            } else {
+                if (remaining > 0) {
+                        target.accept(current.getTimestamp(), createConsumer(id, remaining, results, completeCount, target));
+                } else {
+                    completeCount.countDown();
+                }
+            }
         };
     }
     

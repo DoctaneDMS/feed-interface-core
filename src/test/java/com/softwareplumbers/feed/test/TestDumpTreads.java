@@ -16,6 +16,5 @@ public class TestDumpTreads {
     @Test
     public void testDump() {
         TestUtils.dumpThreads();
-        fail();
     }
 }
