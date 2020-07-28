@@ -46,12 +46,16 @@ import javax.json.JsonObject;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.fail;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
  * @author jonathan
  */
 public class TestUtils {
+    
+    private static Logger LOG = LoggerFactory.getLogger(TestUtils.class);
     
     public static String asString(InputStream is) {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
@@ -168,7 +172,7 @@ public class TestUtils {
     }
     
     public static Consumer<MessageIterator> createConsumer(int id, int count, Map<FeedPath,Message> results, CountDownLatch completeCount, BiConsumer<Instant, Consumer<MessageIterator>> target) {
-        System.out.println("Creating consumer " + id + " expecting " + count + " messages");
+        LOG.debug("Creating consumer " + id + " expecting " + count + " messages");
         return messages->{
             int remaining = count;
             Message current = null;
@@ -176,11 +180,11 @@ public class TestUtils {
                 while (messages.hasNext()) {
                     current = messages.next();
                     results.put(current.getName(), current);
-                    System.out.println("consumer:" + id + " munched: " + current.getName() + " - " + current.getTimestamp());
+                    LOG.debug("consumer:" + id + " munched: " + current.getName() + " - " + current.getTimestamp());
                     remaining--;
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                LOG.error("Error consuming message", e);
             }
             if (remaining > 0) 
                 target.accept(current.getTimestamp(), createConsumer(id, remaining, results, completeCount, target));
