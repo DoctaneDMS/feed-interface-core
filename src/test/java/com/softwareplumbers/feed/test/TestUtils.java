@@ -172,28 +172,33 @@ public class TestUtils {
     }
     
     public static Consumer<MessageIterator> createConsumer(int id, int count, Map<FeedPath,Message> results, CountDownLatch completeCount, BiConsumer<Instant, Consumer<MessageIterator>> target) {
-        LOG.debug("Creating consumer " + id + " expecting " + count + " messages");
+        LOG.debug("Creating consumer: {} expecting {} messages", id, count);
         return messages->{
-            int remaining = count;
-            Message current = null;
-            try {
-                while (messages.hasNext()) {
-                    current = messages.next();
-                    results.put(current.getName(), current);
-                    LOG.debug("consumer:" + id + " munched: " + current.getName() + " - " + current.getTimestamp());
-                    remaining--;
-                }
-            } catch (Exception e) {
-                LOG.error("Error consuming message", e);
-            }
-            if (current == null) {
-                LOG.error("createConsumer called with no messages or failed before any message retrieved - aborting");
+            if (!messages.hasNext()) {
+                LOG.error("consumer: {} called with no messages", id);
                 completeCount.countDown();
             } else {
-                if (remaining > 0) {
-                        target.accept(current.getTimestamp(), createConsumer(id, remaining, results, completeCount, target));
-                } else {
+                int remaining = count;
+                Message current = null;
+                try {
+                    while (messages.hasNext()) {
+                        current = messages.next();
+                        results.put(current.getName(), current);
+                        LOG.debug("consumer: {} munched: {} - {}", current.getName(), current.getTimestamp());
+                        remaining--;
+                    }
+                } catch (Exception e) {
+                    LOG.error("Error consuming message", e);
+                }
+                if (current == null) {
+                    LOG.error("consumer failed before any message retrieved - aborting");
                     completeCount.countDown();
+                } else {
+                    if (remaining > 0) {
+                            target.accept(current.getTimestamp(), createConsumer(id, remaining, results, completeCount, target));
+                    } else {
+                        completeCount.countDown();
+                    }
                 }
             }
         };

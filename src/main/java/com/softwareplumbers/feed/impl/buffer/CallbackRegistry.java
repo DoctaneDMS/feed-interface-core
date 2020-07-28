@@ -63,7 +63,14 @@ public class CallbackRegistry {
         invocable.forEach((callback,from)->{
             LOG.debug("notifiying {} of messages starting {}", callback, from);
             try (MessageIterator results = search.apply(from)) {
-                callback.accept(results);
+                if (results.hasNext())
+                    callback.accept(results);
+                else {  
+                    LOG.warn("New message did not trigger callback waiting for {}", from);
+                    synchronized(this) {
+                        callbacks.put(callback, from);
+                    }
+                }
             }
             LOG.debug("done sending messages to {}", callback);
         });
