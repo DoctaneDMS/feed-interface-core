@@ -14,6 +14,7 @@ import java.io.SequenceInputStream;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 
@@ -68,6 +69,12 @@ public interface Message {
         return Optional.empty();
     }
     
+    public static Optional<UUID> getServerId(JsonObject obj) {
+        if (obj.containsKey("serverId"))
+            return Optional.of(UUID.fromString(obj.getString("serverId")));
+        return Optional.empty();
+    }
+
     public static Optional<FeedPath> getName(JsonObject obj) {
         if (obj.containsKey("name")) {
             return Optional.of(FeedPath.valueOf(obj.getString("name")));
@@ -106,6 +113,8 @@ public interface Message {
     public long getLength();
     public Instant getTimestamp();
     public Message setTimestamp(Instant timestamp);  
+    public UUID getServerId();
+    public Message setServerId(UUID serverId);
     
     public String getSender();
     public Message setSender(String sender);

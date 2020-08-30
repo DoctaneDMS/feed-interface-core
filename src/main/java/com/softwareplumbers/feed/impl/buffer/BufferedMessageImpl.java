@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.Instant;
+import java.util.UUID;
 import javax.json.Json;
 import javax.json.JsonException;
 import javax.json.JsonObject;
@@ -31,6 +32,7 @@ public class BufferedMessageImpl implements Message {
         final JsonObject headers;
         final FeedPath name;
         final Instant timestamp;
+        final UUID serverId;
         final String sender;
         final long length;
         
@@ -39,6 +41,7 @@ public class BufferedMessageImpl implements Message {
             this.headers = allHeaders.getJsonObject("headers");
             this.name = FeedPath.valueOf(allHeaders.getString("name"));
             this.timestamp = Message.getTimestamp(allHeaders).orElse(null);
+            this.serverId = Message.getServerId(allHeaders).orElse(null);
             this.sender = Message.getSender(allHeaders).orElse(null);
         }
     }
@@ -91,7 +94,7 @@ public class BufferedMessageImpl implements Message {
     
     @Override
     public MessageImpl setData(InputStreamSupplier data, long length) {
-        return new MessageImpl(getId(), getName(), getSender(), getTimestamp(), getHeaders(),length, data);
+        return new MessageImpl(getId(), getName(), getSender(), getTimestamp(), getServerId(), getHeaders(),length, data);
     }    
 
     @Override
@@ -110,7 +113,7 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public MessageImpl setName(FeedPath name) {
-        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, getSender(), getTimestamp(), getHeaders(), getLength(), data);
+        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, getSender(), getTimestamp(), getServerId(), getHeaders(), getLength(), data);
     }
 
     @Override
@@ -120,7 +123,7 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public Message setSender(String sender) {
-        return new MessageImpl(getId(), getName(), sender, getTimestamp(), getHeaders(), getLength(), data);
+        return new MessageImpl(getId(), getName(), sender, getTimestamp(), getServerId(), getHeaders(), getLength(), data);
     }
         
     @Override
@@ -130,9 +133,19 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public Message setTimestamp(Instant timestamp) {
-        return new MessageImpl(getId(), getName(), getSender(), timestamp, getHeaders(), getLength(), data);
+        return new MessageImpl(getId(), getName(), getSender(), timestamp, getServerId(), getHeaders(), getLength(), data);
     }
     
+    @Override
+    public UUID getServerId() {
+        return getAllHeaders().serverId;
+    }
+
+    @Override
+    public Message setServerId(UUID serverId) {
+        return new MessageImpl(getId(), getName(), getSender(), getTimestamp(), serverId, getHeaders(), getLength(), data);
+    }
+
     @Override
     public String getId() {
         return getName().part.getId().get();

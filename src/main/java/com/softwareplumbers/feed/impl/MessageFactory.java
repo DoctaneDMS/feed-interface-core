@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -179,12 +180,14 @@ public class MessageFactory {
             FeedPath name = nameSupplier.isPresent() ? nameSupplier.get().get() : Message.getName(allHeaders.get()).orElse(FeedPath.ROOT);
             String sender = Message.getSender(allHeaders.get()).orElse(null);
             Instant timestamp = Message.getTimestamp(allHeaders.get()).orElse(null);
+            UUID serverId = Message.getServerId(allHeaders.get()).orElse(null);
 
             return Optional.of(
                 new MessageImpl(
                     name, 
                     sender,
                     timestamp, 
+                    serverId,
                     Message.getHeaders(allHeaders.get()), 
                     data, 
                     length, 

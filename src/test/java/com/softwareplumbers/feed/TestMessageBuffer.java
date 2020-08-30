@@ -6,20 +6,14 @@
 package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
-import com.softwareplumbers.feed.impl.MessageFactory;
 import com.softwareplumbers.feed.impl.MessageImpl;
 import com.softwareplumbers.feed.impl.buffer.BufferPool;
-import com.softwareplumbers.feed.test.TestUtils;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -32,10 +26,8 @@ import static org.junit.Assert.fail;
 
 import static com.softwareplumbers.feed.test.TestUtils.*;
 import java.util.Collections;
-import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.UUID;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
@@ -51,11 +43,13 @@ public class TestMessageBuffer {
         JsonObject testHeaders = Json.createObjectBuilder().add("field1", "one").build();
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
+        UUID serverId = UUID.randomUUID();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, "testuser", time, testHeaders, testData, -1, true);
+        Message message = new MessageImpl(id, "testuser", time, serverId, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
+        assertEquals(serverId, message.getServerId());
         assertEquals("abc123", asString(message.getData()));   
         assertEquals("testuser", message.getSender());
     }
@@ -65,11 +59,13 @@ public class TestMessageBuffer {
         JsonObject testHeaders = Json.createObjectBuilder().add("field1", "one").build();
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
+        UUID serverId = UUID.randomUUID();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, "testuser", time, testHeaders, testData, -1, true);
+        Message message = new MessageImpl(id, "testuser", time, serverId, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
+        assertEquals(serverId, message.getServerId());
         assertEquals("abc123", asString(message.getData()));
         assertEquals(-1, message.getData().read());
         assertEquals("testuser", message.getSender());
@@ -80,11 +76,13 @@ public class TestMessageBuffer {
         JsonObject testHeaders = Json.createObjectBuilder().add("field1", "one").build();
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
+        UUID serverId = UUID.randomUUID();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, "testuser", time, testHeaders, testData, -1, false);
+        Message message = new MessageImpl(id, "testuser", time, serverId, testHeaders, testData, -1, false);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
+        assertEquals(serverId, message.getServerId());
         assertEquals("abc123", asString(message.getData()));
         assertEquals("abc123", asString(message.getData()));
         assertEquals("testuser", message.getSender());

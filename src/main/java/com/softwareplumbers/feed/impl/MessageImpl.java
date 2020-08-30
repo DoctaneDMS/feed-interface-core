@@ -9,26 +9,19 @@ import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
-import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Optional;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.UUID;
 import javax.json.Json;
 import javax.json.JsonException;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
-import javax.json.JsonReader;
 import javax.json.JsonWriter;
-import javax.json.stream.JsonParser;
 
 /**
  *
@@ -42,14 +35,16 @@ public class MessageImpl implements Message {
     private FeedPath name;
     private String id;
     private Instant timestamp;
+    private UUID serverId;
     private InputStreamSupplier supplier;
     private String sender;
     private long length;
     
-    public MessageImpl(String id, FeedPath name, String sender, Instant timestamp, JsonObject headers, long length, InputStreamSupplier supplier) {
+    public MessageImpl(String id, FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers, long length, InputStreamSupplier supplier) {
         this.name = name;
         this.id = id;
         this.timestamp = timestamp;
+        this.serverId = serverId;
         this.supplier = supplier;
         this.headers = headers;
         this.length = length;
@@ -64,12 +59,13 @@ public class MessageImpl implements Message {
         }
     }
     
-    public MessageImpl(FeedPath name, String sender, Instant timestamp, JsonObject headers, InputStream data, long length, boolean temporary) {
+    public MessageImpl(FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers, InputStream data, long length, boolean temporary) {
         this(
             name == null || name.isEmpty() ? null : name.part.getId().orElse(null),
             name,
             sender,
             timestamp,
+            serverId,
             headers,
             length,
             supplierOf(data, temporary)
@@ -103,7 +99,7 @@ public class MessageImpl implements Message {
     } 
     
     public MessageImpl setData(InputStreamSupplier data, long length) {
-        return new MessageImpl(id, name, sender, timestamp, headers,length, data);
+        return new MessageImpl(id, name, sender, timestamp, serverId, headers,length, data);
     }
     
     @Override
@@ -131,7 +127,7 @@ public class MessageImpl implements Message {
     
     @Override
     public MessageImpl setName(FeedPath name) {
-        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, sender, timestamp, headers, length, supplier);
+        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, sender, timestamp, serverId, headers, length, supplier);
     }
 
     @Override
@@ -141,7 +137,17 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setTimestamp(Instant timestamp) {
-        return new MessageImpl(id, name, sender, timestamp, headers, length, supplier);
+        return new MessageImpl(id, name, sender, timestamp, serverId, headers, length, supplier);
+    }
+    
+    @Override
+    public UUID getServerId() {
+        return serverId;
+    }
+    
+    @Override
+    public Message setServerId(UUID serverId) {
+        return new MessageImpl(id, name, sender, timestamp, serverId, headers, length, supplier);        
     }
     
     @Override
@@ -151,7 +157,7 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setSender(String sender) {
-        return new MessageImpl(id, name, sender, timestamp, headers, length, supplier);
+        return new MessageImpl(id, name, sender, timestamp, serverId, headers, length, supplier);
     }
     
     @Override

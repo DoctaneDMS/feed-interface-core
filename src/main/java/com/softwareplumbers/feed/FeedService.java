@@ -7,6 +7,7 @@ package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 /** Feed Service interface.
@@ -43,14 +44,17 @@ public interface FeedService {
     
     /** Get messages synchronously.
      * 
-     * Sync will return all messages with a timestamp after the given instant.
+     * Sync will return all messages with a timestamp after the given instant. When starting up a client,
+     * or reconnecting after a given server goes down, we use 'sync' to resynchronize the client's view
+     * of events with the view of events as seen by the new server.
      * 
      * @param path Path to feed (must not include a message id)
      * @param from Instant after which we listen for new messages
+     * @param serverId Server id indicates which server's timestamps to use when comparing with 'from'.
      * @return A MessageIterator WHICH MUST BE CLOSED.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    MessageIterator sync(FeedPath path, Instant from) throws InvalidPath;
+    MessageIterator sync(FeedPath path, Instant from, UUID serverId) throws InvalidPath;
     
     /** Sent a message to a feed.
      * 
@@ -63,6 +67,17 @@ public interface FeedService {
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
     Message post(FeedPath path, Message message) throws InvalidPath;
+    
+    /** Get the Id of this server instance.
+     * 
+     * Different servers may have a different view of the sequence in which messages arrive. To
+     * avoid potentially dropping messages when a restart or a failover occurs, clients need
+     * to know which server they are listening to and supply that information when they try
+     * to re-connect to a new server. (see the sync method above).
+     * 
+     * @return 
+     */
+    UUID getServerId();
     
     /** Utility function to dump information about message buffers */
     void dumpState();

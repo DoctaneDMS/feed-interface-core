@@ -15,6 +15,7 @@ import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import org.slf4j.ext.XLogger;
@@ -35,6 +36,7 @@ public abstract class AbstractFeedService implements FeedService {
     private final BufferPool bufferPool;
     private final Map<FeedPath, MessageBuffer> feeds = new ConcurrentHashMap<>();
     private final int bucketSize;
+    private final UUID serverId = UUID.randomUUID();
     
     private static class Indicator {
         public boolean value = false;
@@ -81,8 +83,8 @@ public abstract class AbstractFeedService implements FeedService {
     }
 
     @Override
-    public MessageIterator sync(FeedPath path, Instant from) throws InvalidPath {
-        LOG.entry(path, from);
+    public MessageIterator sync(FeedPath path, Instant from, UUID serverId) throws InvalidPath {
+        LOG.entry(path, from, serverId);
         if (path.isEmpty() || path.part.getId().isPresent()) throw new InvalidPath(path);
         Optional<MessageBuffer> buffer = getBuffer(path);
         if (buffer.isPresent()) {
@@ -111,6 +113,10 @@ public abstract class AbstractFeedService implements FeedService {
         message = message.setName(path.addId(getIdFromBackEnd()));
         MessageBuffer buffer = getOrCreateBuffer(path);
         return LOG.exit(buffer.addMessage(message));
+    }
+    
+    public UUID getServerId() {
+        return serverId;
     }
     
     public void dumpState() {

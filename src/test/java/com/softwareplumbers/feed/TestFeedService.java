@@ -62,7 +62,7 @@ public class TestFeedService {
         assertThat(sentMessages.size(), equalTo(1000));
         TreeMap<FeedPath, Message> responseMessages = new TreeMap<>();
         int count = 0;
-        try (MessageIterator messages = service.sync(path, start)) {
+        try (MessageIterator messages = service.sync(path, start, service.getServerId())) {
             while (messages.hasNext()) {
                 Message received = messages.next();
                 responseMessages.put(received.getName(), received);
