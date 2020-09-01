@@ -22,6 +22,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -76,7 +77,7 @@ public class TestFeedService {
     @Test 
     public void testCancelCallback() throws InvalidPath, InterruptedException {
         
-        BlockingQueue<Message> results = new ArrayBlockingQueue<Message>(10); 
+        BlockingQueue<Message> results = new ArrayBlockingQueue<>(10); 
         
         Consumer<MessageIterator> callback = mi->{
             mi.forEachRemaining(m->{
@@ -89,8 +90,9 @@ public class TestFeedService {
         };
           
         FeedPath feed = randomFeedPath();
-        service.listen(feed, Instant.now(), callback);
-        service.cancelCallback(feed, callback);
+        CompletableFuture<MessageIterator> result = service.listen(feed, Instant.now());
+        result.thenAccept(callback);
+        result.cancel(true);
         post(generateMessage(feed));
                
         assertThat(results.poll(100, TimeUnit.MILLISECONDS), nullValue());

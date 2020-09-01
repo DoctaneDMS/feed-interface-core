@@ -6,8 +6,6 @@
 package com.softwareplumbers.feed.test;
 
 import com.softwareplumbers.common.pipedstream.OutputStreamConsumer;
-import com.softwareplumbers.feed.FeedExceptions;
-import com.softwareplumbers.feed.FeedExceptions.BaseRuntimeException;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import com.softwareplumbers.feed.FeedExceptions.StreamingException;
 import static com.softwareplumbers.feed.FeedExceptions.runtime;
@@ -30,22 +28,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Queue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.json.Json;
 import javax.json.JsonObject;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
-import static org.junit.Assert.fail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -171,49 +166,42 @@ public class TestUtils {
         return Collections.unmodifiableList(Arrays.asList(FEEDS));
     }
     
-    public static Consumer<MessageIterator> createConsumer(int id, int count, Map<FeedPath,Message> results, CountDownLatch completeCount, BiConsumer<Instant, Consumer<MessageIterator>> target) {
-        LOG.debug("Creating consumer: {} expecting {} messages", id, count);
-        return messages->{
-            if (!messages.hasNext()) {
-                LOG.error("consumer: {} called with no messages", id);
-                completeCount.countDown();
-            } else {
-                int remaining = count;
-                Message current = null;
-                try {
-                    while (messages.hasNext()) {
-                        current = messages.next();
-                        results.put(current.getName(), current);
-                        LOG.debug("consumer: {} munched: {} - {}", current.getName(), current.getTimestamp());
-                        remaining--;
-                    }
-                } catch (Exception e) {
-                    LOG.error("Error consuming message", e);
-                }
-                if (current == null) {
-                    LOG.error("consumer failed before any message retrieved - aborting");
-                    completeCount.countDown();
-                } else {
-                    if (remaining > 0) {
-                            target.accept(current.getTimestamp(), createConsumer(id, remaining, results, completeCount, target));
-                    } else {
-                        completeCount.countDown();
-                    }
-                }
-            }
-        };
-    }
-    
-    public static void createReceiver(int id, FeedService service, int count, FeedPath path, Instant from, Map<FeedPath,Message> results, CountDownLatch completeCount) {
+    public static void createReceiver(int id, FeedService service, int count, FeedPath path, Instant from, Map<FeedPath,Message> results) {
         try {
-            service.listen(path, from, createConsumer(id, count, results, completeCount, FeedExceptions.runtime((next, nc)->service.listen(path, next, nc))));
-        } catch (InvalidPath  e) {
-            throw new BaseRuntimeException(e);
+            while (count > 0) {
+                MessageIterator messages = service.listen(path, from).get();
+                Message current = null;
+                while (messages.hasNext()) {
+                    current = messages.next();
+                    results.put(current.getName(), current);
+                    LOG.debug("receiver {} munched: {} - {}", id, current.getName(), current.getTimestamp());
+                    count--;                
+                }
+                LOG.debug("receiver {} end batch", id);
+                if (current != null) from = current.getTimestamp();
+            }
+            LOG.debug("receiver {} complete", id);
+        } catch (InterruptedException | InvalidPath | ExecutionException e) {
+            LOG.error("Error in receiver ", e);
         }
     }
     
-    public static void createReceiver(int id, MessageBuffer buffer, int count, Instant from, Map<FeedPath,Message> results, CountDownLatch completeCount) {
-        buffer.getMessagesAfter(from, createConsumer(id, count, results, completeCount, (next, nc)->buffer.getMessagesAfter(next, nc)));
+    public static void createReceiver(int id, MessageBuffer buffer, int count, Instant from, Map<FeedPath,Message> results) {
+        try {
+            while (count > 0) {
+                MessageIterator messages = buffer.getFutureMessagesAfter(from).get();
+                Message current = null;
+                while (messages.hasNext()) {
+                    current = messages.next();
+                    results.put(current.getName(), current);
+                    LOG.debug("receiver {} munched: {} - {}", id, current.getName(), current.getTimestamp());
+                    count--;                
+                }
+                if (current != null) from = current.getTimestamp();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            LOG.error("Error in receiver ", e);
+        }
     }
     
     public static Set<FeedPath> getDifference(Map<FeedPath,Message> sent, Map<FeedPath,Message> received) {
@@ -255,9 +243,10 @@ public class TestUtils {
             Map<FeedPath,Message> resultMap = new ConcurrentSkipListMap<>();
             results.add(resultMap);
             final int id =  i;
-            new Thread(()->
-                TestUtils.createReceiver(id, buffer, count, from, resultMap, receivers)
-            ).run();
+            new Thread(()-> {
+                TestUtils.createReceiver(id, buffer, count, from, resultMap);
+                receivers.countDown();
+            }).start();
         }
         return results;
     }  
@@ -269,8 +258,13 @@ public class TestUtils {
             for (int j = 0; i < createCount && j < feeds.size(); j++, i++) {
                 List<Map<FeedPath,Message>> result = results.computeIfAbsent(feeds.get(j), fm->new ArrayList<>());
                 Map<FeedPath,Message> resultMap = new ConcurrentSkipListMap<>();
-                TestUtils.createReceiver(i, service, count, feeds.get(j), from, resultMap, receivers);
-                result.add(resultMap);           
+                result.add(resultMap);
+                final int id =  i;
+                final int k = j; // FUCK JAVA LAMBDAS
+                new Thread(()-> {
+                    TestUtils.createReceiver(id, service, count, feeds.get(k), from, resultMap);
+                    receivers.countDown();
+                }).start();
             }
         }
         return results;

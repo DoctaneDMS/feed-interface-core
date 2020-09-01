@@ -28,6 +28,8 @@ import static com.softwareplumbers.feed.test.TestUtils.*;
 import java.util.Collections;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
@@ -90,7 +92,7 @@ public class TestMessageBuffer {
     
     @Test
     public void testMessageRoundtrip() throws IOException {
-        BufferPool pool = new BufferPool(100000);
+        BufferPool pool = new BufferPool(Executors.newSingleThreadExecutor(), 100000);
         MessageBuffer testBuffer = pool.createBuffer(1024);
         Message message = generateMessage(randomFeedPath());
         testBuffer.addMessage(message);
@@ -104,7 +106,7 @@ public class TestMessageBuffer {
     @Test
     public void testMultipleGet() throws IOException, InterruptedException {
         int count = 80;
-        BufferPool pool = new BufferPool(100000);
+        BufferPool pool = new BufferPool(Executors.newSingleThreadExecutor(), 100000);
         MessageBuffer testBuffer = pool.createBuffer(1024);
         Instant first = Instant.now();
         Thread.sleep(100);
@@ -133,7 +135,7 @@ public class TestMessageBuffer {
     @Test
     public void testPoolGrowthAndDeallocation() throws IOException, InterruptedException {
         int messageSize = getAverageMessageSize();
-        BufferPool pool = new BufferPool(messageSize * 20);
+        BufferPool pool = new BufferPool(Executors.newSingleThreadExecutor(), messageSize * 20);
         MessageBuffer buffer = pool.createBuffer(messageSize * 5);
         Instant first = Instant.now();
         Thread.sleep(100);
@@ -153,7 +155,7 @@ public class TestMessageBuffer {
     
     @Test
     public void testMulthreadedAdd() throws IOException, InterruptedException {
-        BufferPool pool = new BufferPool(1000000);
+        BufferPool pool = new BufferPool(Executors.newFixedThreadPool(5), 1000000);
         MessageBuffer buffer = pool.createBuffer(2000);
         Instant start = Instant.now();
         Thread.sleep(100);
@@ -174,27 +176,20 @@ public class TestMessageBuffer {
     }
        
     @Test
-    public void testCallback() throws InterruptedException {
-        BufferPool pool = new BufferPool(1000000);
+    public void testCallback() throws InterruptedException, ExecutionException {
+        BufferPool pool = new BufferPool(Executors.newFixedThreadPool(5), 1000000);
         MessageBuffer buffer = pool.createBuffer(2000);
         Instant start = Instant.now();
         Thread.sleep(100);
         Map<FeedPath,Message> generated = generateMessages(5, 20, 5, Collections.singletonList(randomFeedPath()), message->buffer.addMessage(message));         
         Map<FeedPath,Message> results = new TreeMap<>();
-        CountDownLatch receiving = new CountDownLatch(1);
-        createReceiver(1, buffer, 100, start, results, receiving);
-        if (receiving.await(20, TimeUnit.SECONDS)) {
-            assertMapsEqual(generated, results);
-        } else {
-            buffer.dumpBuffer();
-            showMissing(generated, results);
-            fail("poll timed out");            
-        }
+        createReceiver(1, buffer, 100, start, results);
+        assertMapsEqual(generated, results);
     }
     
     @Test
     public void testCallbackMultipleReceivers() throws InterruptedException {
-        BufferPool pool = new BufferPool(1000000);
+        BufferPool pool = new BufferPool(Executors.newFixedThreadPool(20), 1000000);
         MessageBuffer buffer = pool.createBuffer(2000);
         Instant start = Instant.now();
         Thread.sleep(100);
@@ -206,6 +201,7 @@ public class TestMessageBuffer {
                 assertMapsEqual(generated, resultMap);
             }
         } else {
+            dumpThreads();
             buffer.dumpBuffer();
             for (Map<FeedPath,Message> resultMap : results) {
                 showMissing(generated, resultMap);

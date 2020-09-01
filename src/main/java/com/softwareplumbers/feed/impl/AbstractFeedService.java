@@ -14,9 +14,12 @@ import com.softwareplumbers.feed.impl.buffer.BufferPool;
 import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
@@ -44,11 +47,12 @@ public abstract class AbstractFeedService implements FeedService {
     
     /** Create a new Abstract Feed Service.
      * 
+     * @param callbackExecutor Executor service for running callbacks
      * @param poolSize Amount of memory in bytes to dedicate to all message buffers
      * @param bucketSize Size of a bucket - should be larger than the expected maximum message size
      */
-    public AbstractFeedService(long poolSize, int bucketSize) {
-        this.bufferPool = new BufferPool((int)poolSize);
+    public AbstractFeedService(ExecutorService callbackExecutor, long poolSize, int bucketSize) {
+        this.bufferPool = new BufferPool(callbackExecutor, (int)poolSize);
         this.bucketSize = bucketSize; 
     }
     
@@ -67,42 +71,38 @@ public abstract class AbstractFeedService implements FeedService {
     }
 
     @Override
-    public void listen(FeedPath path, Instant from, Consumer<MessageIterator> callback) throws InvalidPath {
-        LOG.entry(path, from, callback);
+    public CompletableFuture<MessageIterator> listen(FeedPath path, Instant from) throws InvalidPath {
+        LOG.entry(path, from);
         if (path.isEmpty() || path.part.getId().isPresent()) throw LOG.throwing(new InvalidPath(path));
-        getOrCreateBuffer(path).getMessagesAfter(from, callback);
-        LOG.exit();
+        return LOG.exit(getOrCreateBuffer(path).getFutureMessagesAfter(from));
     }
     
-    @Override
-    public void cancelCallback(FeedPath path, Consumer<MessageIterator> callback) throws InvalidPath {
-        LOG.entry(path, callback);
-        if (path.isEmpty() || path.part.getId().isPresent()) throw LOG.throwing(new InvalidPath(path));
-        getBuffer(path).orElseThrow(()->new InvalidPath(path)).cancelCallback(callback);
-        LOG.exit();        
-    }
-
     @Override
     public MessageIterator sync(FeedPath path, Instant from, UUID serverId) throws InvalidPath {
         LOG.entry(path, from, serverId);
         if (path.isEmpty() || path.part.getId().isPresent()) throw new InvalidPath(path);
-        Optional<MessageBuffer> buffer = getBuffer(path);
-        if (buffer.isPresent()) {
-            MessageIterator buffered = buffer.get().getMessagesAfter(from);
-            if (buffer.get().firstTimestamp().map(ts->ts.compareTo(from) < 0).orElse(false)) {
-                // Easy: buffer has messages earlier than from, so this should be good
-                return LOG.exit(buffered);        
-            } else {
-                if (buffered.hasNext()) {
-                    Message first = buffered.next();
-                    LOG.debug("For {} buffer has messages from {}", path, first);
-                    return LOG.exit(MessageIterator.of(MessageIterator.of(first), buffered, syncFromBackEnd(path, from, first.getTimestamp())));
+        if (serverId == null || serverId.equals(this.serverId)) {
+            // Request to sync from client previosuly subscribed to this instance
+            Optional<MessageBuffer> buffer = getBuffer(path);
+            if (buffer.isPresent()) {
+                MessageIterator buffered = buffer.get().getMessagesAfter(from);
+                if (buffer.get().firstTimestamp().map(ts->ts.compareTo(from) < 0).orElse(false)) {
+                    // Easy: buffer has messages earlier than from, so this should be good
+                    return LOG.exit(buffered);        
                 } else {
-                    return LOG.exit(syncFromBackEnd(path, from, Instant.MAX));
+                    if (buffered.hasNext()) {
+                        Message first = buffered.next();
+                        LOG.debug("For {} buffer has messages from {}", path, first);
+                        return LOG.exit(MessageIterator.of(MessageIterator.of(first), buffered, syncFromBackEnd(path, from, first.getTimestamp(), serverId)));
+                    } else {
+                        return LOG.exit(syncFromBackEnd(path, from, Instant.MAX, serverId));
+                    }
                 }
+            } else {
+                return LOG.exit(syncFromBackEnd(path, from, Instant.MAX, serverId));
             }
         } else {
-            return LOG.exit(syncFromBackEnd(path, from, Instant.MAX));
+            return LOG.exit(syncFromBackEnd(path, from, Instant.MAX, serverId));
         }
     }
     
@@ -127,6 +127,6 @@ public abstract class AbstractFeedService implements FeedService {
     }
     
     protected abstract String getIdFromBackEnd();
-    protected abstract MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to) throws InvalidPath;   
+    protected abstract MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to, UUID serverId) throws InvalidPath;   
     protected abstract void startBackEndListener(FeedPath path, Instant from) throws InvalidPath;
 }

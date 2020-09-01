@@ -8,6 +8,8 @@ package com.softwareplumbers.feed;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 /** Feed Service interface.
@@ -29,18 +31,10 @@ public interface FeedService {
      * 
      * @param path Path to feed (must not include a message id)
      * @param after Instant after which we listen for new messages
-     * @param messageConsumer Callback which will be invoked when at least one matching message arrives.
+     * @return Future which will be completed when at least one matching message arrives.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    void listen(FeedPath path, Instant after, Consumer<MessageIterator> messageConsumer) throws InvalidPath;
-    
-    /** Cancel a listener for messages on a given path.
-     * 
-     * @param path The path for which we want to cancel a listener.
-     * @param messageConsumer the specific listener to invalidate
-     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
-     */
-    void cancelCallback(FeedPath path, Consumer<MessageIterator> messageConsumer) throws InvalidPath;
+    CompletableFuture<MessageIterator> listen(FeedPath path, Instant after) throws InvalidPath;
     
     /** Get messages synchronously.
      * 

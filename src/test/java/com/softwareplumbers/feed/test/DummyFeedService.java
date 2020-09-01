@@ -11,6 +11,7 @@ import com.softwareplumbers.feed.impl.AbstractFeedService;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 
 /**
  *
@@ -19,11 +20,11 @@ import java.util.UUID;
 public class DummyFeedService extends AbstractFeedService {
 
     public DummyFeedService(long poolSize, int bucketSize) {
-        super(poolSize, bucketSize);
+        super(Executors.newFixedThreadPool(5), poolSize, bucketSize);
     }
 
     @Override
-    protected MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to) {
+    protected MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to, UUID serverId) {
         return MessageIterator.of(Collections.EMPTY_LIST.iterator(), ()->{});
     }
 

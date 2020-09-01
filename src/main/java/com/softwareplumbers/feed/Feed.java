@@ -6,7 +6,8 @@
 package com.softwareplumbers.feed;
 
 import java.time.Instant;
-import java.util.function.Consumer;
+import java.util.concurrent.CompletableFuture;
+
 
 /** Simple feed interface.
  *
@@ -32,11 +33,11 @@ public interface Feed {
      * 
      * @param service Service from which to receive messages
      * @param from Timestamp after which we are interested in messages
-     * @param callback Callback function which will receive messages
+     * @return Future which will complete when messages are received
      */
-    default void listen(FeedService service, Instant from, Consumer<MessageIterator> callback) {
+    default CompletableFuture<MessageIterator> listen(FeedService service, Instant from) {
         try {
-            service.listen(getName(), from, callback);
+            return service.listen(getName(), from);
         } catch (FeedExceptions.InvalidPath e) {
             throw new FeedExceptions.BaseRuntimeException(e);
         }

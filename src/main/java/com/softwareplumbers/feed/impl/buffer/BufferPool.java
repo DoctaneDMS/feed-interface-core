@@ -8,6 +8,7 @@ package com.softwareplumbers.feed.impl.buffer;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.slf4j.ext.XLogger;
@@ -39,11 +40,13 @@ public class BufferPool {
     }
 
     private long maxSize;
-    private AtomicLong currentSize = new AtomicLong(0);
-    private ConcurrentLinkedDeque<BucketRegistration> registry = new ConcurrentLinkedDeque<>();
+    private final AtomicLong currentSize = new AtomicLong(0);
+    private final ConcurrentLinkedDeque<BucketRegistration> registry = new ConcurrentLinkedDeque<>();
+    private final ExecutorService callbackExecutor;
     
-    public BufferPool(long maxSize) {
+    public BufferPool(ExecutorService callbackExecutor, long maxSize) {
         this.maxSize = maxSize;
+        this.callbackExecutor = callbackExecutor;
     }
     
     /** Get a bucket from the pool and allocate it to the given buffer.
@@ -103,7 +106,7 @@ public class BufferPool {
     
     public MessageBuffer createBuffer(int size) {
         LOG.entry(size);
-        return LOG.exit(new MessageBuffer(this, size));
+        return LOG.exit(new MessageBuffer(callbackExecutor, this, size));
     }
     
     public long getSize() {

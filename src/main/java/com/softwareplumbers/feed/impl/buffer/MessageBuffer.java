@@ -13,9 +13,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import org.slf4j.ext.XLogger;
@@ -29,15 +38,15 @@ public class MessageBuffer {
     
     private static final XLogger LOG = XLoggerFactory.getXLogger(BufferPool.class);
     
-    private final TreeMap<Instant, Bucket> bucketCache = new TreeMap<>();
+    private final NavigableMap<Instant, Bucket> bucketCache = new ConcurrentSkipListMap<>();
     private Bucket current;
     private final BufferPool pool;
     private final Clock clock = new MessageClock();
-    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-    private final CallbackRegistry callbacks = new CallbackRegistry();
+    private final CallbackRegistry callbacks;
     
-    MessageBuffer(BufferPool pool, int initSize) {
+    MessageBuffer(ExecutorService callbackExecutor, BufferPool pool, int initSize) {
         this.pool = pool;
+        this.callbacks = new CallbackRegistry(callbackExecutor);
         allocateNewBucket(initSize, Instant.now());
     }
     
@@ -67,45 +76,37 @@ public class MessageBuffer {
     }
     
     public final boolean isEmpty() {
-        try {
-            lock.readLock().lock();
-            return current.isEmpty() && bucketCache.size() == 1;
-        } finally {
-            lock.readLock().unlock();
-        }
+        // bucketCache.size() could be an expensive operation so instead we check to see if there
+        // is a key higher than the first key. Because keys are never removed from the bucket cache
+        // this also be safe from a concurrency perspective
+        return current.isEmpty() && bucketCache.higherKey(bucketCache.firstKey()) == null;
     }
     
     public Message addMessage(Message message) {
         LOG.entry(message);
         Message result;
+        Instant timestamp;
         try {
-            lock.writeLock().lock();
-            Message timestamped = message.setTimestamp(Instant.now(clock));
-            result = current.addMessage(timestamped, this::handleOverflow);
+            synchronized(this) {
+                timestamp = Instant.now(clock);
+                Message timestamped = message.setTimestamp(timestamp);
+                result = current.addMessage(timestamped, this::handleOverflow);
+            }
         } catch (StreamingException e) {
             throw runtime(e);
-        } finally {
-            lock.writeLock().unlock();
-        }
-        callbacks.callback(this::getMessagesAfter);
+        } 
+        callbacks.notify(timestamp, this::getMessagesAfter);
         return LOG.exit(result);
     }
     
     public Optional<Instant> firstTimestamp() {
-        lock.readLock().lock();
-        try {
-            return bucketCache.isEmpty() ? Optional.empty() : Optional.of(bucketCache.firstEntry().getValue().firstTimestamp());
-        } finally {
-            lock.readLock().unlock();
-        }
+        return bucketCache.isEmpty() ? Optional.empty() : Optional.of(bucketCache.firstEntry().getValue().firstTimestamp());
     }
     
     public MessageIterator getMessagesAfter(Instant timestamp) {
         LOG.entry(timestamp);
-        lock.readLock().lock();
         Instant searchFrom = bucketCache.floorKey(timestamp);
         if (searchFrom == null) searchFrom = timestamp;
-        // NOTE read lock held until iterator is closed
         LOG.debug("returning messages from buckets after {}", searchFrom);
         return LOG.exit(
             MessageIterator.of(bucketCache
@@ -113,27 +114,22 @@ public class MessageBuffer {
                 .values()
                 .stream()
                 .flatMap(bucket->bucket.getMessagesAfter(timestamp))
-                .iterator(), ()->lock.readLock().unlock())
+                .iterator(), ()->{})
         );
     }
     
-    public void getMessagesAfter(Instant timestamp, Consumer<MessageIterator> callback) {
-        LOG.entry(timestamp, callback);
+    public CompletableFuture<MessageIterator> getFutureMessagesAfter(Instant timestamp) {
+        LOG.entry(timestamp);
         try (MessageIterator found = getMessagesAfter(timestamp)) {
             if (found.hasNext()) {
                 LOG.debug("immediately returning messages");
-                callback.accept(found);
+                return LOG.exit(CompletableFuture.completedFuture(found));
             } else {
-                callbacks.addCallback(timestamp, callback);
+                return LOG.exit(callbacks.submitSearch(timestamp));
             }
         }
-        LOG.exit();
     }
-
-    public void cancelCallback(Consumer<MessageIterator> callback) {
-        callbacks.cancel(callback);
-    }
-    
+            
     public void dumpBuffer() {
         for (Instant bucketStart : bucketCache.keySet()) {
             System.out.println("Bucket starting: " + bucketStart);
@@ -143,14 +139,12 @@ public class MessageBuffer {
 
     void deallocateBucket(Bucket bucket) {
         LOG.entry(bucket);
-        try {
-            lock.writeLock().lock();
-            Map<Instant, Bucket> toRemove = bucketCache.headMap(bucket.firstTimestamp(), true);
-            pool.releaseBuckets(toRemove.values());
-            toRemove.clear();
-        } finally {
-            lock.writeLock().unlock();
-        }
+        Map<Instant, Bucket> toRemove = bucketCache.headMap(bucket.firstTimestamp(), true);
+        pool.releaseBuckets(toRemove.values());
+        // toRemove.clear() is not necessarily atomic, and we want to ensure elements are remove
+        // from first to last in order to maintain consistency.
+        Iterator<Map.Entry<Instant,Bucket>> iterator = toRemove.entrySet().iterator();
+        while(iterator.hasNext()) { iterator.next(); iterator.remove(); }
         LOG.exit();
     }    
 }

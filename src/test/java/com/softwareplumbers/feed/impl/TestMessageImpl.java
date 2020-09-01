@@ -5,9 +5,7 @@
  */
 package com.softwareplumbers.feed.impl;
 
-import com.softwareplumbers.feed.test.TestUtils;
 import java.io.ByteArrayInputStream;
-import java.math.BigDecimal;
 import javax.json.Json;
 import javax.json.JsonObject;
 import javax.json.JsonValue;

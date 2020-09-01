@@ -9,13 +9,13 @@ import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedExceptions.StreamingException;
 import com.softwareplumbers.feed.Message;
-import com.softwareplumbers.feed.impl.MessageImpl;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
 import java.time.Instant;
-import java.util.TreeMap;
+import java.util.NavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Stream;
 
 /**
@@ -32,7 +32,7 @@ class Bucket {
     private byte[] buffer;
     private int position;
     
-    private final TreeMap<Instant, Message> timeIndex;
+    private final NavigableMap<Instant, Message> timeIndex;
     
     private class BufferOverflow extends IOException {
         
@@ -77,7 +77,7 @@ class Bucket {
     public Bucket(int maxSize) {
         buffer = new byte[maxSize];
         position = 0;
-        timeIndex = new TreeMap<>();
+        timeIndex = new ConcurrentSkipListMap<>();
     }
     
     /** Resize a bucket.
