@@ -5,11 +5,13 @@
  */
 package com.softwareplumbers.feed.impl.buffer;
 
+import com.softwareplumbers.feed.Message;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
@@ -42,11 +44,9 @@ public class BufferPool {
     private long maxSize;
     private final AtomicLong currentSize = new AtomicLong(0);
     private final ConcurrentLinkedDeque<BucketRegistration> registry = new ConcurrentLinkedDeque<>();
-    private final ExecutorService callbackExecutor;
     
-    public BufferPool(ExecutorService callbackExecutor, long maxSize) {
+    public BufferPool(long maxSize) {
         this.maxSize = maxSize;
-        this.callbackExecutor = callbackExecutor;
     }
     
     /** Get a bucket from the pool and allocate it to the given buffer.
@@ -104,9 +104,18 @@ public class BufferPool {
         LOG.exit();
     }
     
-    public MessageBuffer createBuffer(int size) {
+    /** Create a new message buffer in this pool.
+     * 
+     * Note that if we are to create an aggregate feed across several buffers, it
+     * is important that the buffers share the same clock.
+     * 
+     * @param clock Clock used to create message timestamps
+     * @param size Size of buffer to create
+     * @return A new message buffer.
+     */
+    public MessageBuffer createBuffer(MessageClock clock, int size) {
         LOG.entry(size);
-        return LOG.exit(new MessageBuffer(callbackExecutor, this, size));
+        return LOG.exit(new MessageBuffer(this, clock, size));
     }
     
     public long getSize() {

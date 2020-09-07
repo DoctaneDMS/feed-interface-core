@@ -5,12 +5,15 @@
  */
 package com.softwareplumbers.feed;
 
+import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
+import java.io.IOException;
+import java.io.Writer;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
-import java.util.function.Consumer;
+import java.util.stream.Stream;
+
 
 /** Feed Service interface.
  * 
@@ -65,7 +68,7 @@ public interface FeedService {
     /** Get the Id of this server instance.
      * 
      * Different servers may have a different view of the sequence in which messages arrive. To
-     * avoid potentially dropping messages when a restart or a failover occurs, clients need
+     * avoid potentially dropping messages when a restart or a fail-over occurs, clients need
      * to know which server they are listening to and supply that information when they try
      * to re-connect to a new server. (see the sync method above).
      * 
@@ -73,6 +76,5 @@ public interface FeedService {
      */
     UUID getServerId();
     
-    /** Utility function to dump information about message buffers */
-    void dumpState();
+    public MessageIterator getMessages(FeedPath addId) throws InvalidPath, InvalidId;
 }

@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed.impl;
 
+import com.softwareplumbers.feed.MessageType;
 import java.io.ByteArrayInputStream;
 import javax.json.Json;
 import javax.json.JsonObject;
@@ -30,7 +31,7 @@ public class TestMessageImpl {
     @Test
     public void testCanCreateMinimalMessage() {
         
-        MessageImpl impl = new MessageImpl(null, null, null, null, JsonValue.EMPTY_JSON_OBJECT, new ByteArrayInputStream(NO_BYTES), -1, false);
+        MessageImpl impl = new MessageImpl(MessageType.NONE, null, null, null, null, JsonValue.EMPTY_JSON_OBJECT, new ByteArrayInputStream(NO_BYTES), -1, false);
         assertThat(impl.getName(), nullValue());
         assertThat(impl.getId(), nullValue());
         assertThat(impl.getFeedName(), nullValue());
@@ -42,7 +43,7 @@ public class TestMessageImpl {
     
     @Test
     public void testCanWriteMinimalMessage() {
-        MessageImpl impl = new MessageImpl(null, null, null, null, JsonValue.EMPTY_JSON_OBJECT, new ByteArrayInputStream(NO_BYTES), -1, false);
+        MessageImpl impl = new MessageImpl(MessageType.NONE, null, null, null, null, JsonValue.EMPTY_JSON_OBJECT, new ByteArrayInputStream(NO_BYTES), -1, false);
         JsonObject headerStream = Json.createReader(impl.getHeaderStream()).readObject();
         assertThat(headerStream, equalTo(MIN_HEADERS));        
     }

@@ -6,7 +6,9 @@
 package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.BaseRuntimeException;
+import java.util.Comparator;
 import java.util.Iterator;
+import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Consumer;
@@ -29,6 +31,10 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
     
     public MessageIterator(Runnable closeHandler) {
         this.closeHandler = closeHandler;
+    }
+    
+    public Peekable peekable() {
+        return new Peekable(this);
     }
     
     /** Release any resources associated with this MessageIterator.
@@ -175,6 +181,71 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
 
         }       
     }
+    
+    private static class Merge extends MessageIterator {
+        private final Peekable[] merged;
+        
+        @Override
+        public void close() {
+            for (Peekable source : merged) source.close();
+        }
+        
+        public Merge(Stream<MessageIterator> sources) {
+            super(()->{});
+            merged = sources.map(MessageIterator::peekable).toArray(Peekable[]::new);
+        }
+        
+        @Override
+        public boolean hasNext() {
+            return Stream.of(merged).anyMatch(MessageIterator::hasNext);
+        }
+
+        @Override
+        public Message next() {
+            return Stream.of(merged)
+                .filter(MessageIterator::hasNext).min(Comparator.comparing(peekable->peekable.peek().get().getTimestamp()))
+                .orElseThrow(()->new RuntimeException("called next() when no next item available"))
+                .next();
+        }       
+    }    
+    
+
+    public static class Peekable extends MessageIterator {
+        
+        Message next;
+        final MessageIterator base;
+        
+        public Peekable(MessageIterator base) {
+            super(base::close);
+            this.base = base;
+            if (base.hasNext()) {
+                next = base.next();
+            } else {
+                next = null;
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            return next != null;
+        }
+
+        @Override
+        public Message next() {
+            Message result = next;
+            next = base.hasNext() ? base.next() : null;
+            return result;
+        }
+        
+        public Optional<Message> peek() {
+            return Optional.ofNullable(next);
+        }
+    
+        @Override
+        public Peekable peekable() {
+            return this;
+        }
+    }
         
     /** Create a MessageIterator from another iterator, plus a handler to release resources.
      * 
@@ -218,6 +289,14 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
     
     public static MessageIterator defer(BaseRuntimeException error) {
         return new DeferredError(error);
+    }
+    
+    public static MessageIterator merge(MessageIterator... sources) {
+        return new Merge(Stream.of(sources));
+    }
+    
+    public static MessageIterator merge(Stream<MessageIterator> sources) {
+        return new Merge(sources); 
     }
         
 }

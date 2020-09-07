@@ -12,13 +12,15 @@ import java.util.stream.Stream;
 
 /** Defines the path to a feed or message.
  * 
- * Paths are of the form ~feedid/feed/feed/~messageid where
- * the feedid and messageid components are optional and as many feed
+ * Paths are of the form feed/feed/~messageid where
+ * the messageid component is optional and as many feed
  * names as desired can be added to the hierarchy.
  * 
  * Feed Paths are comparable, with earlier elements being compared first. Paths
  * starting with similar subsequences are ordered such that the shorter paths appear
  * first.
+ * 
+ * A feed Id may not be valid across servers.
  *
  * @author Jonathan Essex
  */
@@ -40,7 +42,6 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
          * 
          */
         public enum Type {
-            FEEDID,
             FEED,
             MESSAGEID
         }
@@ -148,20 +149,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
             return Optional.empty();
         }
     }
-
-    private static class FeedId extends Id {
-    
-        public FeedId(String id) {
-            super(Element.Type.FEEDID, id);
-        }
-    
-        public static Optional<Id> valueOf(String item) {
-            if (item.startsWith("~") && !item.startsWith("~~")) 
-                return Optional.of(new MessageId(unescape(item.substring(1))));
-            return Optional.empty();
-        }
-    }
-    
+  
     /** An empty feed path */
     public static final FeedPath ROOT = new FeedPath(null, null) {
         @Override
@@ -187,10 +175,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
     }
     
     public FeedPath addId(String id) {
-        if (isEmpty()) 
-            return add(new FeedId(id));
-        else
-            return add(new MessageId(id));
+        return add(new MessageId(id));
     }
     
     public FeedPath setVersion(String version) {
@@ -228,16 +213,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
     public String toString() {
         return join("/");
     }
-    
-    public FeedPath afterFeedId() {
-        if (isEmpty()) return ROOT;
-        if (part.type == Element.Type.FEEDID) {
-            return ROOT;
-        } else {
-            return parent.afterFeedId().add(part);
-        }
-    }
-    
+
     private FeedPath beforeMessageIdOrEmpty() {
         if (isEmpty()) return ROOT;
         if (part.type == Element.Type.MESSAGEID) {
@@ -265,7 +241,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         Iterable<String> elements = split(path, "/")::iterator;
         for (String pathElement : elements) {
             if (pathElement.length() == 0) continue;  
-            Optional<Id> id = result == ROOT ? FeedId.valueOf(pathElement) : MessageId.valueOf(pathElement);
+            Optional<Id> id = MessageId.valueOf(pathElement);
             if (id.isPresent()) {
                 result = result.add(id.get());
             } else {

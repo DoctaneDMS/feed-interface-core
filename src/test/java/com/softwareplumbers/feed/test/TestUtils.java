@@ -13,6 +13,7 @@ import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.FeedService;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
+import com.softwareplumbers.feed.MessageType;
 import com.softwareplumbers.feed.impl.MessageImpl;
 import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import com.softwareplumbers.feed.impl.buffer.MessageClock;
@@ -103,7 +104,7 @@ public class TestUtils {
         InputStream testData = new ByteArrayInputStream(randomText(10).getBytes());
         Instant time = Instant.now(CLOCK);
         FeedPath id = feed.addId(UUID.randomUUID().toString());
-        return new MessageImpl(id, "testuser", time, UUID.randomUUID(), testHeaders, testData, -1, false);
+        return new MessageImpl(MessageType.NONE, id, "testuser", time, UUID.randomUUID(), testHeaders, testData, -1, false);
     }
     
     public static int getAverageMessageSize() throws IOException {
@@ -187,20 +188,16 @@ public class TestUtils {
     }
     
     public static void createReceiver(int id, MessageBuffer buffer, int count, Instant from, Map<FeedPath,Message> results) {
-        try {
-            while (count > 0) {
-                MessageIterator messages = buffer.getFutureMessagesAfter(from).get();
-                Message current = null;
-                while (messages.hasNext()) {
-                    current = messages.next();
-                    results.put(current.getName(), current);
-                    LOG.debug("receiver {} munched: {} - {}", id, current.getName(), current.getTimestamp());
-                    count--;                
-                }
-                if (current != null) from = current.getTimestamp();
+        while (count > 0) {
+            MessageIterator messages = buffer.getMessagesAfter(from);
+            Message current = null;
+            while (messages.hasNext()) {
+                current = messages.next();
+                results.put(current.getName(), current);
+                LOG.debug("receiver {} munched: {} - {}", id, current.getName(), current.getTimestamp());
+                count--;                
             }
-        } catch (InterruptedException | ExecutionException e) {
-            LOG.error("Error in receiver ", e);
+            if (current != null) from = current.getTimestamp();
         }
     }
     

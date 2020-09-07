@@ -82,6 +82,10 @@ public interface Message {
             return Optional.empty();
         }
     }
+
+    public static MessageType getType(JsonObject obj) {
+        return MessageType.valueOf(obj.getString("type", null));
+    }
     
     /** Get the headers of a message.
      * 
@@ -115,7 +119,8 @@ public interface Message {
     public Message setTimestamp(Instant timestamp);  
     public UUID getServerId();
     public Message setServerId(UUID serverId);
-    
+    public MessageType getType();
+    public Message setType(MessageType type);
     public String getSender();
     public Message setSender(String sender);
     
@@ -178,7 +183,7 @@ public interface Message {
     /** Compare messages.
      * 
      * Messages are equal if their name and headers are equal. Binary data is
-     * note compared.
+     * not compared.
      * 
      * @param a Message a
      * @param b Message b

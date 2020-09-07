@@ -15,25 +15,18 @@ import com.softwareplumbers.feed.FeedPath;
 public class FeedImpl implements Feed {
     
     private final FeedPath name;
-    private final String id;
     
-    public FeedImpl(String id, FeedPath name) {
+    public FeedImpl(FeedPath name) {
         this.name = name;
-        this.id = id;
     }
 
     @Override
     public FeedPath getName() {
         return name;
     }
-
-    @Override
-    public String getId() {
-        return id;
-    }
     
     @Override
     public String toString() {
-        return "FeedImpl[" + id + "," + name + "]";
+        return "FeedImpl[" + name + "]";
     }
 }

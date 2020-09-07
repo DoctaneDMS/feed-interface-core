@@ -8,6 +8,7 @@ package com.softwareplumbers.feed;
 import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import com.softwareplumbers.feed.impl.MessageImpl;
 import com.softwareplumbers.feed.impl.buffer.BufferPool;
+import com.softwareplumbers.feed.impl.buffer.MessageClock;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,11 +26,11 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.fail;
 
 import static com.softwareplumbers.feed.test.TestUtils.*;
+import java.io.PrintWriter;
 import java.util.Collections;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
@@ -47,7 +48,7 @@ public class TestMessageBuffer {
         Instant time = Instant.now();
         UUID serverId = UUID.randomUUID();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, "testuser", time, serverId, testHeaders, testData, -1, true);
+        Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
@@ -63,7 +64,7 @@ public class TestMessageBuffer {
         Instant time = Instant.now();
         UUID serverId = UUID.randomUUID();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, "testuser", time, serverId, testHeaders, testData, -1, true);
+        Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
@@ -80,7 +81,7 @@ public class TestMessageBuffer {
         Instant time = Instant.now();
         UUID serverId = UUID.randomUUID();
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(id, "testuser", time, serverId, testHeaders, testData, -1, false);
+        Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, testHeaders, testData, -1, false);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
@@ -92,8 +93,8 @@ public class TestMessageBuffer {
     
     @Test
     public void testMessageRoundtrip() throws IOException {
-        BufferPool pool = new BufferPool(Executors.newSingleThreadExecutor(), 100000);
-        MessageBuffer testBuffer = pool.createBuffer(1024);
+        BufferPool pool = new BufferPool(100000);
+        MessageBuffer testBuffer = pool.createBuffer(new MessageClock(), 1024);
         Message message = generateMessage(randomFeedPath());
         testBuffer.addMessage(message);
         MessageIterator results = testBuffer.getMessagesAfter(message.getTimestamp().minusMillis(100));
@@ -106,12 +107,12 @@ public class TestMessageBuffer {
     @Test
     public void testMultipleGet() throws IOException, InterruptedException {
         int count = 80;
-        BufferPool pool = new BufferPool(Executors.newSingleThreadExecutor(), 100000);
-        MessageBuffer testBuffer = pool.createBuffer(1024);
+        BufferPool pool = new BufferPool(100000);
+        MessageBuffer testBuffer = pool.createBuffer(new MessageClock(), 1024);
         Instant first = Instant.now();
         Thread.sleep(100);
         Map<FeedPath,Message> messages = generateMessages(count, 2, randomFeedPath(), message->testBuffer.addMessage(message));
-        testBuffer.dumpBuffer();
+        testBuffer.dumpState(new PrintWriter(System.out));
         System.out.println("****Getting messages from " + first + " ****");
         List<Message> result = testBuffer.getMessagesAfter(first).toStream().collect(Collectors.toList());
         
@@ -135,17 +136,17 @@ public class TestMessageBuffer {
     @Test
     public void testPoolGrowthAndDeallocation() throws IOException, InterruptedException {
         int messageSize = getAverageMessageSize();
-        BufferPool pool = new BufferPool(Executors.newSingleThreadExecutor(), messageSize * 20);
-        MessageBuffer buffer = pool.createBuffer(messageSize * 5);
+        BufferPool pool = new BufferPool(messageSize * 5);
+        MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant first = Instant.now();
         Thread.sleep(100);
         Map<FeedPath,Message> generated = generateMessages(40, 2, randomFeedPath(), message->buffer.addMessage(message));
         // pool size should be greater than maximum
         assertThat(pool.getSize(), greaterThan(messageSize * 20L));
-        buffer.dumpBuffer();
+        buffer.dumpState(new PrintWriter(System.out));
         System.out.println("deallocating");
         pool.deallocateBuckets();
-        buffer.dumpBuffer();
+        buffer.dumpState(new PrintWriter(System.out));
         // pool size should be less than maximum
         assertThat(pool.getSize(), lessThanOrEqualTo(messageSize * 20L));
         List<Message> result = buffer.getMessagesAfter(first).toStream().collect(Collectors.toList());
@@ -155,8 +156,8 @@ public class TestMessageBuffer {
     
     @Test
     public void testMulthreadedAdd() throws IOException, InterruptedException {
-        BufferPool pool = new BufferPool(Executors.newFixedThreadPool(5), 1000000);
-        MessageBuffer buffer = pool.createBuffer(2000);
+        BufferPool pool = new BufferPool(100000);
+        MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant start = Instant.now();
         Thread.sleep(100);
         Map<FeedPath,Message> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message)); 
@@ -177,8 +178,8 @@ public class TestMessageBuffer {
        
     @Test
     public void testCallback() throws InterruptedException, ExecutionException {
-        BufferPool pool = new BufferPool(Executors.newFixedThreadPool(5), 1000000);
-        MessageBuffer buffer = pool.createBuffer(2000);
+        BufferPool pool = new BufferPool(100000);
+        MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant start = Instant.now();
         Thread.sleep(100);
         Map<FeedPath,Message> generated = generateMessages(5, 20, 5, Collections.singletonList(randomFeedPath()), message->buffer.addMessage(message));         
@@ -189,8 +190,8 @@ public class TestMessageBuffer {
     
     @Test
     public void testCallbackMultipleReceivers() throws InterruptedException {
-        BufferPool pool = new BufferPool(Executors.newFixedThreadPool(20), 1000000);
-        MessageBuffer buffer = pool.createBuffer(2000);
+        BufferPool pool = new BufferPool(100000);
+        MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant start = Instant.now();
         Thread.sleep(100);
         Map<FeedPath,Message> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message)); 
@@ -202,7 +203,7 @@ public class TestMessageBuffer {
             }
         } else {
             dumpThreads();
-            buffer.dumpBuffer();
+            buffer.dumpState(new PrintWriter(System.out));
             for (Map<FeedPath,Message> resultMap : results) {
                 showMissing(generated, resultMap);
             }

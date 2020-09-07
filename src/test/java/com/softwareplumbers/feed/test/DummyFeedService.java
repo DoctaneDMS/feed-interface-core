@@ -5,7 +5,9 @@
  */
 package com.softwareplumbers.feed.test;
 
+import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
+import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.impl.AbstractFeedService;
 import java.time.Instant;
@@ -24,7 +26,7 @@ public class DummyFeedService extends AbstractFeedService {
     }
 
     @Override
-    protected MessageIterator syncFromBackEnd(FeedPath path, Instant from, Instant to, UUID serverId) {
+    protected MessageIterator syncFromBackEnd(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId) {
         return MessageIterator.of(Collections.EMPTY_LIST.iterator(), ()->{});
     }
 
@@ -33,7 +35,9 @@ public class DummyFeedService extends AbstractFeedService {
     }  
     
     @Override
-    protected String getIdFromBackEnd() {
+    protected String generateMessageId() {
         return UUID.randomUUID().toString();
     }
+
+
 }

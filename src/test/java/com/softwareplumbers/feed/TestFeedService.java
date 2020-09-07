@@ -46,7 +46,7 @@ public class TestFeedService {
     public Message post(Message message) {
         try {
             return service.post(message.getFeedName(), message);
-        } catch (Exception e) {
+        } catch (InvalidPath e) {
             throw new RuntimeException(e);
         }
     }

@@ -9,6 +9,7 @@ import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
+import com.softwareplumbers.feed.MessageType;
 import java.io.BufferedInputStream;
 import java.io.FilterInputStream;
 import java.io.IOException;
@@ -181,9 +182,11 @@ public class MessageFactory {
             String sender = Message.getSender(allHeaders.get()).orElse(null);
             Instant timestamp = Message.getTimestamp(allHeaders.get()).orElse(null);
             UUID serverId = Message.getServerId(allHeaders.get()).orElse(null);
+            MessageType type = Message.getType(allHeaders.get());
 
             return Optional.of(
                 new MessageImpl(
+                    type,
                     name, 
                     sender,
                     timestamp, 

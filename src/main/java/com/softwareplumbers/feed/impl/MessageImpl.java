@@ -9,13 +9,16 @@ import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
+import com.softwareplumbers.feed.MessageType;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.UUID;
 import javax.json.Json;
 import javax.json.JsonException;
@@ -30,6 +33,7 @@ import javax.json.JsonWriter;
 public class MessageImpl implements Message {
     
     public static final int MAX_HEADER_SIZE = 10000;
+    private static final InputStream NULL_STREAM = new InputStream() { public int read() { return -1; } };
     
     private JsonObject headers;
     private FeedPath name;
@@ -39,8 +43,9 @@ public class MessageImpl implements Message {
     private InputStreamSupplier supplier;
     private String sender;
     private long length;
+    private MessageType type;
     
-    public MessageImpl(String id, FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers, long length, InputStreamSupplier supplier) {
+    public MessageImpl(MessageType type, String id, FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers, long length, InputStreamSupplier supplier) {
         this.name = name;
         this.id = id;
         this.timestamp = timestamp;
@@ -49,6 +54,7 @@ public class MessageImpl implements Message {
         this.headers = headers;
         this.length = length;
         this.sender = sender;
+        this.type = type;
     }
     
     private static InputStreamSupplier supplierOf(InputStream data, boolean temporary) {
@@ -59,8 +65,9 @@ public class MessageImpl implements Message {
         }
     }
     
-    public MessageImpl(FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers, InputStream data, long length, boolean temporary) {
+    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers, InputStream data, long length, boolean temporary) {
         this(
+            type,
             name == null || name.isEmpty() ? null : name.part.getId().orElse(null),
             name,
             sender,
@@ -70,6 +77,18 @@ public class MessageImpl implements Message {
             length,
             supplierOf(data, temporary)
         );
+    }
+    
+    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers) {
+        this.name = name;
+        this.id = name == null || name.isEmpty() ? null : name.part.getId().orElse(null);
+        this.timestamp = timestamp;
+        this.serverId = serverId;
+        this.supplier = ()->NULL_STREAM;
+        this.headers = headers;
+        this.length = 0;
+        this.sender = sender;
+        this.type = type;        
     }
     
     @Override
@@ -82,6 +101,8 @@ public class MessageImpl implements Message {
         if (name != null) builder = builder.add("name", name.toString());
         if (timestamp != null) builder = builder.add("timestamp", timestamp.toString());
         if (sender != null) builder = builder.add("sender", sender);
+        if (type != MessageType.NONE) builder.add("type", type.toString());
+        if (serverId != null) builder.add("serverId", serverId.toString());
 
         return builder
             .add("headers", headers)
@@ -99,7 +120,7 @@ public class MessageImpl implements Message {
     } 
     
     public MessageImpl setData(InputStreamSupplier data, long length) {
-        return new MessageImpl(id, name, sender, timestamp, serverId, headers,length, data);
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers,length, data);
     }
     
     @Override
@@ -127,7 +148,7 @@ public class MessageImpl implements Message {
     
     @Override
     public MessageImpl setName(FeedPath name) {
-        return new MessageImpl(name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, sender, timestamp, serverId, headers, length, supplier);
+        return new MessageImpl(type, name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, sender, timestamp, serverId, headers, length, supplier);
     }
 
     @Override
@@ -137,7 +158,7 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setTimestamp(Instant timestamp) {
-        return new MessageImpl(id, name, sender, timestamp, serverId, headers, length, supplier);
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers, length, supplier);
     }
     
     @Override
@@ -147,7 +168,7 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setServerId(UUID serverId) {
-        return new MessageImpl(id, name, sender, timestamp, serverId, headers, length, supplier);        
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers, length, supplier);        
     }
     
     @Override
@@ -157,7 +178,17 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setSender(String sender) {
-        return new MessageImpl(id, name, sender, timestamp, serverId, headers, length, supplier);
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers, length, supplier);
+    }
+    
+    @Override
+    public MessageType getType() {
+        return type;
+    }
+    
+    @Override
+    public Message setType(MessageType type) {
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers, length, supplier);        
     }
     
     @Override
@@ -223,5 +254,9 @@ public class MessageImpl implements Message {
             return "MessageImpl[" + getAllHeaders() + "]";
         else
             return "MessageImpl[" + getHeaders() + "]";
+    }
+    
+    public static Message acknowledgement(Message message, Instant atTime, UUID atServer) {
+        return new MessageImpl(MessageType.ACK, message.getName(), null, atTime, atServer, JsonObject.EMPTY_JSON_OBJECT);
     }
 }

@@ -12,9 +12,14 @@ import com.softwareplumbers.feed.Message;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.io.SequenceInputStream;
 import java.time.Instant;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Stream;
 
@@ -33,6 +38,7 @@ class Bucket {
     private int position;
     
     private final NavigableMap<Instant, Message> timeIndex;
+    private final Map<String, List<Message>> idIndex;
     
     private class BufferOverflow extends IOException {
         
@@ -78,6 +84,7 @@ class Bucket {
         buffer = new byte[maxSize];
         position = 0;
         timeIndex = new ConcurrentSkipListMap<>();
+        idIndex = new ConcurrentHashMap<>();
     }
     
     /** Resize a bucket.
@@ -113,6 +120,7 @@ class Bucket {
         
         Message buffered = new BufferedMessageImpl(chunk(endData, position), chunk(start, endData));
         timeIndex.put(message.getTimestamp(), buffered);
+        idIndex.computeIfAbsent(message.getId(), key->new LinkedList()).add(message);
         return buffered;
     }
     
@@ -127,9 +135,9 @@ class Bucket {
         }
     }
 
-    void dumpBucket() {
+    void dumpBucket(PrintWriter out) {
         for (Instant time : timeIndex.keySet()) {
-            System.out.println(time + ":" + timeIndex.get(time));
+            out.println(time + ":" + timeIndex.get(time));
         }
     }
     
@@ -148,5 +156,21 @@ class Bucket {
     Stream<Message> getMessagesAfter(Instant timestamp) {
         return timeIndex.tailMap(timestamp, false).values().stream();
     }
+
+    /** Get messages between from and to.
+     * 
+     * @param from Returns messages with timestamp greater than from
+     * @param fromInclusive includes any messages with timestamp equal to from
+     * @param to Returns messages with timestamp less than or equal to to
+     * @param toInclusive includes any messages with timestamp equal to to
+     * @return Stream of messages.
+     */
+    Stream<Message> getMessagesBetween(Instant from, boolean fromInclusive, Instant to, boolean toInclusive) {
+        return timeIndex.subMap(from, fromInclusive, to, toInclusive).values().stream();
+    }
     
+    Stream<Message> getMessages(String id) {
+        return idIndex.get(id).stream();
+    }
+        
 }

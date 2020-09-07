@@ -17,6 +17,7 @@ public class FeedExceptions {
     public static enum Type {
         INVALID_PATH,
         INVALID_JSON,
+        INVALID_ID,
         STREAMING_EXCEPTION
     }
     
@@ -135,6 +136,36 @@ public class FeedExceptions {
         }
     }
     
+    /** Throw if an id is invalid
+     * 
+     */
+    public static class InvalidId extends BaseException {
+        public final FeedPath path;
+        public final String id;
+        public InvalidId(FeedPath path, String id) {
+            super(Type.INVALID_ID, "Invalid Id: " + id + " on path " + path.toString());
+            this.path = path;
+            this.id = id;
+        }
+        public static Optional<FeedPath> getPath(JsonObject object) {
+            try {
+                return Optional.of(FeedPath.valueOf(object.getString("path")));
+            } catch (Exception e) {
+                return Optional.empty();
+            }
+        }
+        public static Optional<String> getId(JsonObject object) {
+            try {
+                return Optional.of(object.getString("id"));
+            } catch (Exception e) {
+                return Optional.empty();
+            }
+        }
+        public JsonObjectBuilder buildJson(JsonObjectBuilder bldr) {
+            return super.buildJson(bldr).add("path", path.toString()).add("id", id);
+        }
+    }
+    
     public static BaseException build(JsonObject json) {
         try {
         Type type = BaseException.getType(json).orElseThrow(()->new InvalidJson("missing type", json));
@@ -143,6 +174,8 @@ public class FeedExceptions {
                     return new InvalidPath(InvalidPath.getPath(json).orElseThrow(()->new InvalidJson("missing path", json)));
                 case INVALID_JSON:
                     return new InvalidJson(InvalidJson.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)), InvalidJson.getJson(json));
+                case INVALID_ID:
+                    return new InvalidId(InvalidId.getPath(json).orElseThrow(()->new InvalidJson("missing path", json)), InvalidId.getId(json).orElseThrow(()->new InvalidJson("missing id", json)));
                 case STREAMING_EXCEPTION:
                     return new StreamingException(StreamingException.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)));
                 default:

@@ -9,24 +9,18 @@ import com.softwareplumbers.feed.FeedExceptions.StreamingException;
 import static com.softwareplumbers.feed.FeedExceptions.runtime;
 import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.Message;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.Writer;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
-import java.util.TreeMap;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
 
@@ -41,12 +35,11 @@ public class MessageBuffer {
     private final NavigableMap<Instant, Bucket> bucketCache = new ConcurrentSkipListMap<>();
     private Bucket current;
     private final BufferPool pool;
-    private final Clock clock = new MessageClock();
-    private final CallbackRegistry callbacks;
+    private final Clock clock;
     
-    MessageBuffer(ExecutorService callbackExecutor, BufferPool pool, int initSize) {
+    MessageBuffer(BufferPool pool, MessageClock clock, int initSize) {
         this.pool = pool;
-        this.callbacks = new CallbackRegistry(callbackExecutor);
+        this.clock = clock;
         allocateNewBucket(initSize, Instant.now());
     }
     
@@ -95,7 +88,6 @@ public class MessageBuffer {
         } catch (StreamingException e) {
             throw runtime(e);
         } 
-        callbacks.notify(timestamp, this::getMessagesAfter);
         return LOG.exit(result);
     }
     
@@ -103,6 +95,15 @@ public class MessageBuffer {
         return bucketCache.isEmpty() ? Optional.empty() : Optional.of(bucketCache.firstEntry().getValue().firstTimestamp());
     }
     
+    /** Get messages after a given timestamp.
+     * 
+     * Concurrency is per ConcurrentSkipListMap - the Message iterator should contain
+     * everything present at the time of calling and may (but is not guaranteed to) contain
+     * items added subsequently.
+     * 
+     * @param timestamp Time from which we are retrieving messages.
+     * @return 
+     */
     public MessageIterator getMessagesAfter(Instant timestamp) {
         LOG.entry(timestamp);
         Instant searchFrom = bucketCache.floorKey(timestamp);
@@ -118,22 +119,47 @@ public class MessageBuffer {
         );
     }
     
-    public CompletableFuture<MessageIterator> getFutureMessagesAfter(Instant timestamp) {
-        LOG.entry(timestamp);
-        try (MessageIterator found = getMessagesAfter(timestamp)) {
-            if (found.hasNext()) {
-                LOG.debug("immediately returning messages");
-                return LOG.exit(CompletableFuture.completedFuture(found));
-            } else {
-                return LOG.exit(callbacks.submitSearch(timestamp));
-            }
-        }
+    /** Get messages between two timestamps.
+     * 
+     * This method actually locks the buffer, preventing writes while the boundaries a calculated.
+     * This has the useful side-effect that if 'to' comes from the same clock as this.clock, then
+     * the buffer will never contain a message with timestamp before 'to' which was not present in 
+     * the returned iterator.
+     * 
+     * @param from lower bound (gets messages with timestamp greater than this value)
+     * @param to upper bound (gets messages with timestamp less than or equal to this value)
+     * @return 
+     */
+    public MessageIterator getMessagesBetween(Instant from, boolean fromInclusive, Instant to, boolean toInclusive) {
+        LOG.entry(from, to);
+        Instant searchFrom = Optional.ofNullable(bucketCache.floorKey(from)).orElse(from);
+        LOG.debug("returning messages from buckets between {} and {}", searchFrom, to);
+        return LOG.exit(
+            MessageIterator.of(bucketCache
+                .subMap(searchFrom, true, to, true)
+                .values()
+                .stream()
+                .flatMap(bucket->bucket.getMessagesBetween(from, fromInclusive, to, toInclusive))
+                .iterator(), ()->{})
+        );
+    }
+    
+    public MessageIterator getMessages(String id, Predicate<Message>... filters) {
+        LOG.entry(id);
+        Predicate<Message> filter = Stream.of(filters).reduce(message->true,  Predicate::and);
+        return LOG.exit(
+            MessageIterator.of(
+                 bucketCache.values().stream()
+                    .flatMap(bucket->bucket.getMessages(id))
+                    .filter(filter)
+            )
+        );
     }
             
-    public void dumpBuffer() {
+    public void dumpState(PrintWriter out) {
         for (Instant bucketStart : bucketCache.keySet()) {
-            System.out.println("Bucket starting: " + bucketStart);
-            bucketCache.get(bucketStart).dumpBucket();
+            out.println("Bucket starting: " + bucketStart);
+            bucketCache.get(bucketStart).dumpBucket(out);
         }
     }
 
