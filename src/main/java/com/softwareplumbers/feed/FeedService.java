@@ -29,6 +29,7 @@ public interface FeedService {
      * 
      * @param path Path to feed (must not include a message id)
      * @param after Instant after which we listen for new messages
+     * @param serverId Server id indicates which server's timestamps to use when comparing with 'from'.
      * @return Future which will be completed when at least one matching message arrives.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
@@ -53,6 +54,7 @@ public interface FeedService {
      * can return up to n+1 messages in a cluster with n servers.
      * 
      * @param messageId The message Id we are searching for
+     * @param filters Optional predicates to filter the set of returned results 
      * @return All messages which share the given id.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidId 
@@ -63,21 +65,42 @@ public interface FeedService {
      * 
      * Search will return all messages with a timestamp after the given instant. The serverId
      * flag indicates which server the 'from' timestamp came from (since different servers
-     * may  have a different view of time).
-     * v
+     * may  have a different view of time). If the relay option is 'true', then the search will
+     * be relayed to other servers in the cluster if all requested messages are not available 
+     * locally.
+     * 
      * @param path Path to feed (must not include a message id)
      * @param from Instant after which we search for new messages
      * @param serverId Server id indicates which server's timestamps to use when comparing with 'from'.
+     * @param relay If true, relay this search to other servers in the cluster
+     * @param filters Optional predicates to filter the set of returned results 
      * @return A MessageIterator WHICH MUST BE CLOSED.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    MessageIterator search(FeedPath path, Instant from, UUID serverId, Predicate<Message>... filters) throws InvalidPath;
+    MessageIterator search(FeedPath path, Instant from, UUID serverId, boolean relay, Predicate<Message>... filters) throws InvalidPath;
     
     /** Get messages synchronously.
      * 
-     * Sync will return all messages with a timestamp between the given instants. The serverId
+     * Convenience method equivalent to search(path, from, serverId, true, filters)
+     * 
+     * @param path Path to feed (must not include a message id)
+     * @param from Instant after which we search for new messages
+     * @param serverId Server id indicates which server's timestamps to use when comparing with 'from'.
+     * @param filters Optional predicates to filter the set of returned results 
+     * @return A MessageIterator WHICH MUST BE CLOSED.
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
+     */
+    default MessageIterator search(FeedPath path, Instant from, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
+        return search(path, from, serverId, true, filters);
+    }
+    
+    /** Get messages synchronously.
+     * 
+     * Search will return all messages with a timestamp between the given instants. The serverId
      * flag indicates which server the timestamps came from (since different servers
-     * may  have a different view of time).
+     * may  have a different view of time). If the relay option is 'true', then the search will
+     * be relayed to other servers in the cluster if all requested messages are not available 
+     * locally.
      * 
      * @param path Path to feed (must not include a message id)
      * @param from Instant from which we search for new messages
@@ -85,10 +108,30 @@ public interface FeedService {
      * @param to Instant to which we search for new messages
      * @param toInclusive indicates that the returned values should include timestamps equal to from
      * @param serverId Server id indicates which server's timestamps to use when comparing with 'from'.
+     * @param relay If true, relay this search to other servers in the cluster
+     * @param filters Optional predicates to filter the set of returned results 
      * @return A MessageIterator WHICH MUST BE CLOSED.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    MessageIterator search(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath;
+    MessageIterator search(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, boolean relay, Predicate<Message>... filters) throws InvalidPath;
+
+    /** Get messages synchronously.
+     * 
+     * Convenience method equivalent to search(path, from, fromInclusive, to, toInclusive, serverId, true, filters)
+     * 
+     * @param path Path to feed (must not include a message id)
+     * @param from Instant after which we search for new messages
+     * @param fromInclusive indicates that the returned values should include timestamps equal to from
+     * @param to Instant to which we search for new messages
+     * @param toInclusive indicates that the returned values should include timestamps equal to from
+     * @param serverId Server id indicates which server's timestamps to use when comparing with 'from'.
+     * @param filters Optional predicates to filter the set of returned results 
+     * @return A MessageIterator WHICH MUST BE CLOSED.
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
+     */
+    default MessageIterator search(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
+        return search(path, from, fromInclusive, to, toInclusive, serverId, true, filters);
+    }
     
     /** Sent a message to a feed.
      * 
@@ -113,5 +156,12 @@ public interface FeedService {
      */
     UUID getServerId();
     
-
+    /** Get the Cluster to which this service belongs.
+     * 
+     * The Cluster object can be used to access other servers in the same cluster
+     * as 'this' one.
+     * 
+     * @return A Cluster object.
+     */
+    Cluster getCluster();
 }

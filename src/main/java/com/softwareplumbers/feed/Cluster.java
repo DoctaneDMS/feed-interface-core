@@ -5,7 +5,10 @@
  */
 package com.softwareplumbers.feed;
 
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -13,6 +16,10 @@ import java.util.stream.Stream;
  * @author jonat
  */
 public interface Cluster {
-    FeedService getService(UUID id);
-    Stream<FeedService> getServices();
+    
+    default Optional<FeedService> getService(UUID id) {
+        return getServices(service->Objects.equals(service.getServerId(), id)).findAny();
+    }
+    
+    Stream<FeedService> getServices(Predicate<FeedService>... filters);
 }

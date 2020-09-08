@@ -46,7 +46,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
             MESSAGEID
         }
         
-        /** The type of this particlar element */
+        /** The type of this particular element */
         public final Type type;
         
         /** Get the name of this element, if it has one */

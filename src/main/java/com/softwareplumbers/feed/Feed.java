@@ -86,26 +86,33 @@ public interface Feed {
      */    
     default MessageIterator search(FeedService service, String id, Predicate<Message>... filters) throws InvalidId {
         try {
-            return service.search(getName().addId(id));
+            return service.search(getName().addId(id), filters);
         } catch (FeedExceptions.InvalidPath e) {
             throw new FeedExceptions.BaseRuntimeException(e);
         }          
     }
     
-    default MessageIterator search(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
+    default MessageIterator search(FeedService service, Instant from, UUID serverId, boolean relay, Predicate<Message>... filters) {
         try {
-            return service.search(getName(), from, serverId);
+            return service.search(getName(), from, serverId, relay, filters);
         } catch (FeedExceptions.InvalidPath e) {
             throw new FeedExceptions.BaseRuntimeException(e);
         }                  
     }
     
+    default MessageIterator search(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
+        return search(service, from, serverId, true, filters);
+    }
     
-    default MessageIterator search(FeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) {
+    default MessageIterator search(FeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, boolean relay, Predicate<Message>... filters) {
         try {
-            return service.search(getName(), from, fromInclusive, to, toInclusive, serverId);
+            return service.search(getName(), from, fromInclusive, to, toInclusive, serverId, relay, filters);
         } catch (FeedExceptions.InvalidPath e) {
             throw new FeedExceptions.BaseRuntimeException(e);
         }                  
+    }    
+    
+    default MessageIterator search(FeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) {
+        return search(service, from, fromInclusive, to, toInclusive, serverId, true, filters);
     }    
 }

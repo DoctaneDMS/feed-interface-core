@@ -299,4 +299,5 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
         return new Merge(sources); 
     }
         
+    public static final MessageIterator EMPTY = of();
 }
