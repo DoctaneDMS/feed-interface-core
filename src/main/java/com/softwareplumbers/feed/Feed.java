@@ -6,11 +6,10 @@
 package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
-import java.io.IOException;
-import java.io.Writer;
 import java.time.Instant;
-import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 
 
 /** Simple feed interface.
@@ -27,19 +26,36 @@ public interface Feed {
     
     /** Convenience method for receiving messages related to this feed.
      * 
-     * Should be the same as calling service.listen(this.getName(), from)
+     * Should be the same as calling service.listen(this.getName(), from, serverId)
+     * 
+     * @param service Service from which to receive messages
+     * @param from Timestamp after which we are interested in messages
+     * @param serverId Server at which the from timestamp was retrieved
+     * @return Future which will complete when messages are received
+     */
+    default CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId) {
+        try {
+            return service.listen(getName(), from, serverId);
+        } catch (FeedExceptions.InvalidPath e) {
+            throw new FeedExceptions.BaseRuntimeException(e);
+        }
+    }
+    
+    /** Convenience method for receiving messages related to this feed that are posted to this server
+     * 
+     * Should be the same as calling service.watch(this.getName(), from)
      * 
      * @param service Service from which to receive messages
      * @param from Timestamp after which we are interested in messages
      * @return Future which will complete when messages are received
      */
-    default CompletableFuture<MessageIterator> listen(FeedService service, Instant from) {
+    default CompletableFuture<MessageIterator> watch(FeedService service, Instant from) {
         try {
-            return service.listen(getName(), from);
+            return service.watch(getName(), from);
         } catch (FeedExceptions.InvalidPath e) {
             throw new FeedExceptions.BaseRuntimeException(e);
         }
-    }
+    }    
     
     /** Convenience method for posting messages to this feed.
      * 
@@ -56,13 +72,40 @@ public interface Feed {
             throw new FeedExceptions.BaseRuntimeException(e);
         }        
     }
-    
-    default MessageIterator getMessages(FeedService service, String id) throws InvalidId {
+
+    /** Get all messages sharing the given message Id.
+     * 
+     * Typically a message and its related ACKs will share the same message Id. Generally
+     * we expect a message to be acknowledged by each server in the cluster, so this method
+     * can return up to n+1 messages in a cluster with n servers.
+     * 
+     * @param service Service to search
+     * @param id The message Id we are searching for
+     * @return All messages which share the given id.
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidId 
+     */    
+    default MessageIterator search(FeedService service, String id, Predicate<Message>... filters) throws InvalidId {
         try {
-            return service.getMessages(getName().addId(id));
+            return service.search(getName().addId(id));
         } catch (FeedExceptions.InvalidPath e) {
             throw new FeedExceptions.BaseRuntimeException(e);
         }          
     }
     
+    default MessageIterator search(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
+        try {
+            return service.search(getName(), from, serverId);
+        } catch (FeedExceptions.InvalidPath e) {
+            throw new FeedExceptions.BaseRuntimeException(e);
+        }                  
+    }
+    
+    
+    default MessageIterator search(FeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) {
+        try {
+            return service.search(getName(), from, fromInclusive, to, toInclusive, serverId);
+        } catch (FeedExceptions.InvalidPath e) {
+            throw new FeedExceptions.BaseRuntimeException(e);
+        }                  
+    }    
 }

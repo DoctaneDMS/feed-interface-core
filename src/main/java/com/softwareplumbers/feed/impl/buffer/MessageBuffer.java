@@ -68,6 +68,19 @@ public class MessageBuffer {
         return clock.instant();
     }
     
+    /** Checkpoint guarantees that no buffer entries will be written with a timestamp before the returned value.
+     * 
+     * Essentially this gets a write lock on the buffer an then gets new timestamp from the buffer clock. This enables
+     * us to perform a repeatable read on the buffer by using the value returned by this function as the upper bound.
+     * 
+     * @return A timestamp 
+     */
+    public final Instant checkpoint() {
+        synchronized(this) {
+            return clock.instant();
+        }
+    }
+    
     public final boolean isEmpty() {
         // bucketCache.size() could be an expensive operation so instead we check to see if there
         // is a key higher than the first key. Because keys are never removed from the bucket cache
@@ -104,9 +117,10 @@ public class MessageBuffer {
      * @param timestamp Time from which we are retrieving messages.
      * @return 
      */
-    public MessageIterator getMessagesAfter(Instant timestamp) {
+    public MessageIterator getMessagesAfter(Instant timestamp, Predicate<Message>... filters) {
         LOG.entry(timestamp);
         Instant searchFrom = bucketCache.floorKey(timestamp);
+        Predicate<Message> filter = Stream.of(filters).reduce(message->true,  Predicate::and);
         if (searchFrom == null) searchFrom = timestamp;
         LOG.debug("returning messages from buckets after {}", searchFrom);
         return LOG.exit(
@@ -115,24 +129,24 @@ public class MessageBuffer {
                 .values()
                 .stream()
                 .flatMap(bucket->bucket.getMessagesAfter(timestamp))
+                .filter(filter)
                 .iterator(), ()->{})
         );
     }
     
     /** Get messages between two timestamps.
      * 
-     * This method actually locks the buffer, preventing writes while the boundaries a calculated.
-     * This has the useful side-effect that if 'to' comes from the same clock as this.clock, then
-     * the buffer will never contain a message with timestamp before 'to' which was not present in 
-     * the returned iterator.
-     * 
-     * @param from lower bound (gets messages with timestamp greater than this value)
-     * @param to upper bound (gets messages with timestamp less than or equal to this value)
+     * @param from lower bound 
+     * @param fromInclusive lower bound includes given value if true
+     * @param to upper bound 
+     * @param toInclusive upper bound includes given value if true
+     * @param filters predicates used to filter the result 
      * @return 
      */
-    public MessageIterator getMessagesBetween(Instant from, boolean fromInclusive, Instant to, boolean toInclusive) {
-        LOG.entry(from, to);
+    public MessageIterator getMessagesBetween(Instant from, boolean fromInclusive, Instant to, boolean toInclusive, Predicate<Message>... filters) {
+        LOG.entry(from, fromInclusive, to, toInclusive);
         Instant searchFrom = Optional.ofNullable(bucketCache.floorKey(from)).orElse(from);
+        Predicate<Message> filter = Stream.of(filters).reduce(message->true,  Predicate::and);
         LOG.debug("returning messages from buckets between {} and {}", searchFrom, to);
         return LOG.exit(
             MessageIterator.of(bucketCache
@@ -140,6 +154,7 @@ public class MessageBuffer {
                 .values()
                 .stream()
                 .flatMap(bucket->bucket.getMessagesBetween(from, fromInclusive, to, toInclusive))
+                .filter(filter)
                 .iterator(), ()->{})
         );
     }

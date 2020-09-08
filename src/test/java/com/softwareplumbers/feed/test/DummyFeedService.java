@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.Executors;
+import java.util.function.Predicate;
 
 /**
  *
@@ -26,13 +27,9 @@ public class DummyFeedService extends AbstractFeedService {
     }
 
     @Override
-    protected MessageIterator syncFromBackEnd(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId) {
+    protected MessageIterator syncFromBackEnd(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) {
         return MessageIterator.of(Collections.EMPTY_LIST.iterator(), ()->{});
     }
-
-    @Override
-    protected void startBackEndListener(FeedPath path, Instant from) {
-    }  
     
     @Override
     protected String generateMessageId() {

@@ -63,7 +63,7 @@ public class TestFeedService {
         assertThat(sentMessages.size(), equalTo(1000));
         TreeMap<FeedPath, Message> responseMessages = new TreeMap<>();
         int count = 0;
-        try (MessageIterator messages = service.sync(path, start, service.getServerId())) {
+        try (MessageIterator messages = service.search(path, start, service.getServerId())) {
             while (messages.hasNext()) {
                 Message received = messages.next();
                 responseMessages.put(received.getName(), received);
@@ -90,7 +90,7 @@ public class TestFeedService {
         };
           
         FeedPath feed = randomFeedPath();
-        CompletableFuture<MessageIterator> result = service.listen(feed, Instant.now());
+        CompletableFuture<MessageIterator> result = service.listen(feed, Instant.now(), service.getServerId());
         result.thenAccept(callback);
         result.cancel(true);
         post(generateMessage(feed));

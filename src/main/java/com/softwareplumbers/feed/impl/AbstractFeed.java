@@ -16,7 +16,6 @@ import com.softwareplumbers.feed.MessageType;
 import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.Writer;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -42,61 +41,80 @@ public class AbstractFeed implements Feed {
     
     private static final XLogger LOG = XLoggerFactory.getXLogger(AbstractFeed.class);
     
-    private final AbstractFeedService service;
+    private static class Callback {
+        public final CompletableFuture<MessageIterator> future;
+        public final Predicate<Message> predicate;
+        public Callback(Predicate<Message> predicate) {
+            this.predicate = predicate;
+            this.future = new CompletableFuture<>();
+        }
+    }
+       
     private final Optional<AbstractFeed> parentFeed;
     private final Optional<String> name;
-    private final NavigableMap<Instant, List<CompletableFuture<MessageIterator>>> callbacks = new TreeMap<>();
+    private final NavigableMap<Instant, List<Callback>> callbacks = new TreeMap<>();
     private final Map<String, AbstractFeed> children = new ConcurrentHashMap<>();
     private final MessageBuffer buffer;
     
-    private AbstractFeed(AbstractFeedService service, AbstractFeed parentFeed, String name) {
-        this.service = service;
+    private AbstractFeed(MessageBuffer buffer, AbstractFeed parentFeed, String name) {
         this.parentFeed = Optional.of(parentFeed);
         this.name = Optional.of(name);
-        this.buffer = service.createBuffer();
+        this.buffer = buffer;
     }
     
-    public AbstractFeed(AbstractFeedService service) {
-        this.service = service;
+    private static AbstractFeedService cast(FeedService service) {
+        try {
+            return (AbstractFeedService)service;
+        } catch (ClassCastException e) {
+            throw new RuntimeException("Can only use AbstractFeed with AbstractFeedService", e);
+        }
+    }
+    
+    public AbstractFeed(MessageBuffer buffer) {
         this.parentFeed = Optional.empty();
         this.name = Optional.empty();
-        this.buffer = service.createBuffer();
+        this.buffer = buffer;
     }
     
-    public AbstractFeed getFeed(FeedPath path) throws InvalidPath {
+    public AbstractFeed getFeed(FeedService service, FeedPath path) throws InvalidPath {
         if (path.isEmpty()) return this;
-        AbstractFeed parent = getFeed(path.parent);
+        AbstractFeed parent = getFeed(service, path.parent);
         return path.part.getName()
-            .map(name->parent.children.computeIfAbsent(name, key -> new AbstractFeed(service, parent, key)))
+            .map(name->parent.children.computeIfAbsent(name, key -> new AbstractFeed(cast(service).createBuffer(), parent, key)))
             .orElseThrow(()->LOG.throwing(new InvalidPath(path)));
     }
               
-    protected void trigger(Message message) {
+    private void trigger(AbstractFeedService service, Message message) {
         LOG.entry(message);
         synchronized(this) {
-            Iterator<Map.Entry<Instant, List<CompletableFuture<MessageIterator>>>> activated = callbacks.headMap(message.getTimestamp(), false).entrySet().iterator();
+            Iterator<Map.Entry<Instant, List<Callback>>> activated = callbacks.headMap(message.getTimestamp(), false).entrySet().iterator();
             while (activated.hasNext()) {
-                final Map.Entry<Instant, List<CompletableFuture<MessageIterator>>> entry = activated.next();
+                final Map.Entry<Instant, List<Callback>> entry = activated.next();
                 Instant entryTimestamp = entry.getKey();
                 activated.remove();
-                for (CompletableFuture<MessageIterator> result : entry.getValue()) {
-                    if (!result.isCancelled()) {
-                        service.callback(() -> { 
-                            MessageIterator messages = search(entryTimestamp);
-                            if (messages.hasNext()) {
-                                result.complete(messages);
-                            } else {
-                                LOG.warn("No messages, resubmitting callback {}", result);
-                                synchronized(this) {
-                                    callbacks.computeIfAbsent(entryTimestamp, key -> new LinkedList()).add(result);
+                for (Callback callback : entry.getValue()) {
+                    if (!callback.future.isCancelled()) {
+                        if (callback.predicate.test(message)) {
+                            service.callback(() -> { 
+                                MessageIterator messages = search(service, entryTimestamp, service.getServerId(), callback.predicate);
+                                if (messages.hasNext()) {
+                                    callback.future.complete(messages);
+                                } else {
+                                    // This shouldn't happen, but... belt and braces.
+                                    LOG.warn("No messages, resubmitting callback {}", callback);
+                                    synchronized(this) {
+                                        callbacks.computeIfAbsent(entryTimestamp, key -> new LinkedList()).add(callback);
+                                    }
                                 }
-                            }
-                        });
+                            });
+                        } else {
+                            callbacks.computeIfAbsent(entryTimestamp, key -> new LinkedList()).add(callback);
+                        }
                     }
                 }
             }
         }
-        parentFeed.ifPresent(feed->feed.trigger(message));
+        parentFeed.ifPresent(feed->feed.trigger(service, message));
         LOG.exit();
     }
 
@@ -107,51 +125,72 @@ public class AbstractFeed implements Feed {
     }
 
     @Override
-    public CompletableFuture<MessageIterator> listen(FeedService service, Instant from) {
-        LOG.entry(service, from);
-        MessageIterator results = search(from);
+    public CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId) {
+        LOG.entry(service, from, serverId);
+        MessageIterator results = search(service, from, serverId);
         if (results.hasNext()) {
             LOG.debug("Found results, returning immediately");
             return LOG.exit(CompletableFuture.completedFuture(results));
         } else {
-            CompletableFuture<MessageIterator> result = new CompletableFuture<>();
+            Callback result = new Callback(m->true);
             synchronized(this) {
                 callbacks.computeIfAbsent(from, key -> new LinkedList()).add(result);
             }
-            return LOG.exit(result);            
+            return LOG.exit(result.future);            
+        }
+    }
+
+    @Override
+    public CompletableFuture<MessageIterator> watch(FeedService service, Instant from) {
+        LOG.entry(service, from);
+        final Predicate<Message> THIS_SERVER = message->message.getServerId().equals(service.getServerId());
+        MessageIterator results = search(service, from, service.getServerId(), THIS_SERVER); 
+        if (results.hasNext()) {
+            LOG.debug("Found results, returning immediately");
+            return LOG.exit(CompletableFuture.completedFuture(results));
+        } else {
+            Callback result = new Callback(THIS_SERVER);
+            synchronized(this) {
+                callbacks.computeIfAbsent(from, key -> new LinkedList()).add(result);
+            }
+            return LOG.exit(result.future);            
         }
     }
     
-    public Message post(Message message) {
-        message = message.setName(getName().addId(service.generateMessageId()));
+    public Message post(FeedService service, Message message) {
+        AbstractFeedService svc = cast(service);
+        message = message.setName(getName().addId(svc.generateMessageId()));
         Message result = buffer.addMessage(message);
-        trigger(result);
+        trigger(svc, result);
         return result;
     }
     
-    public MessageIterator search(Instant from, Instant to) {
-        Stream<MessageIterator> feeds = Stream.concat(
-            Stream.of(buffer.getMessagesBetween(from, false, to, true)), 
-            children.values().stream().map(feed->feed.search(from,to)));
-        return MessageIterator.merge(feeds);
-    }
+
     
-    public MessageIterator search(Instant from) {
+    @Override
+    public MessageIterator search(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
         if (children.isEmpty()) {
-            return buffer.getMessagesAfter(from);
+            return search(service, from, false, Instant.MAX, true, serverId);
         } else {
-            // We do this to ensure we are returning all the messages there will ever be
-            // with a timestamp less than now. 
-            Instant now = Instant.now(service.getClock());
-            return search(from, now);
+            return search(service, from, false, checkpoint(), true, serverId);
         }
     }
     
-    public MessageIterator getMessages(String id, Predicate<Message>... filter) {
+    private Instant checkpoint() {
+        return Stream.concat(
+            Stream.of(
+                buffer.checkpoint()), 
+                children.values().stream().map(AbstractFeed::checkpoint)
+            ).min(Comparator.naturalOrder())
+            .orElseThrow(()->new RuntimeException("Failed checkpoint"));
+    }
+    
+    @Override
+    public MessageIterator search(FeedService service, String id, Predicate<Message>... filter) {
         return buffer.getMessages(id, filter);
     }
     
-    private Predicate<Message> filterByServerPerspective(Instant from, Instant to, UUID serverId) {
+    private Predicate<Message> filterByServerPerspective(AbstractFeedService service, Instant from, Instant to, UUID serverId) {
         // Transform messages timestamp another server's perspective. For each message, we should
         // have an ack saying when it arrived on that server. So the message timestamp becomes the
         // ack timestamp, while the ack timestamp for messages originally posted to this server becomes
@@ -161,7 +200,7 @@ public class AbstractFeed implements Feed {
             if (message.getType() == MessageType.ACK) {
                 // This message is an ACK
                 if (message.getServerId().equals(service.getServerId())) {
-                    timestamp = getMessages(message.getId(), m -> m.getType() != MessageType.ACK) // Find the corresponding non-ack
+                    timestamp = buffer.getMessages(message.getId(), m -> m.getType() != MessageType.ACK) // Find the corresponding non-ack
                         .toStream()
                         .findAny()
                         .map(Message::getTimestamp) // Get the timestamp of the main message
@@ -169,7 +208,7 @@ public class AbstractFeed implements Feed {
                 } 
             } else {
                 // This message is not an ACK
-                timestamp = getMessages(message.getId(), m -> m.getType() == MessageType.ACK && m.getServerId().equals(serverId)) // Find the ACK from the requested server
+                timestamp = buffer.getMessages(message.getId(), m -> m.getType() == MessageType.ACK && m.getServerId().equals(serverId)) // Find the ACK from the requested server
                     .toStream()
                     .findAny()
                     .map(Message::getTimestamp) // Get the timestamp of the ack
@@ -179,18 +218,21 @@ public class AbstractFeed implements Feed {
         };
     }
     
-    public MessageIterator sync(Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId) {
+    @Override
+    public MessageIterator search(FeedService svc, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) {
         LOG.entry(from, serverId);
         MessageIterator result;
         boolean bufferedDataComplete;
+        AbstractFeedService service = cast(svc);
         
         // Fetch any locally bufffered data
         if (serverId == null || serverId.equals(service.getServerId())) {
-            result = buffer.getMessagesBetween(from, fromInclusive, to, toInclusive);
+            result = buffer.getMessagesBetween(from, fromInclusive, to, toInclusive, filters);
             bufferedDataComplete = buffer.firstTimestamp().map(first->!first.isAfter(from)).orElse(false);
         } else {
             Instant acksFrom = from.minusSeconds(service.getAckTimeout()); // Add extra time to ensure we fetch all the acks
-            result = MessageIterator.of(buffer.getMessagesAfter(acksFrom).toStream().filter(filterByServerPerspective(from, to, serverId)));
+            Predicate<Message> filter = Stream.of(filters).reduce(message->true,  Predicate::and);        
+            result = buffer.getMessagesAfter(acksFrom, filterByServerPerspective(service, from, to, serverId).and(filter));
             bufferedDataComplete = buffer.firstTimestamp().map(first->!first.isAfter(acksFrom)).orElse(false);
         }
         
@@ -199,9 +241,9 @@ public class AbstractFeed implements Feed {
             try {
                 if (result.hasNext()) {
                     Message first = result.next();
-                    result = MessageIterator.of(service.syncFromBackEnd(getName(), from, fromInclusive, first.getTimestamp(), false, serverId), MessageIterator.of(first), result);
+                    result = MessageIterator.of(service.syncFromBackEnd(getName(), from, fromInclusive, first.getTimestamp(), false, serverId, filters), MessageIterator.of(first), result);
                 } else {
-                    result = service.syncFromBackEnd(getName(), from, fromInclusive, to, toInclusive, serverId);
+                    result = service.syncFromBackEnd(getName(), from, fromInclusive, to, toInclusive, serverId, filters);
                 }
             } catch (InvalidPath exp) {
                 // Invalid path shouldn't happen here
@@ -212,7 +254,7 @@ public class AbstractFeed implements Feed {
         if (!children.isEmpty()) {
             Stream<MessageIterator> feeds = Stream.concat(
                 Stream.of(result), 
-                children.values().stream().map(feed->feed.sync(from, fromInclusive, to, toInclusive, serverId)));
+                children.values().stream().map(feed->feed.search(service, from, fromInclusive, to, toInclusive, serverId, filters)));
             MessageIterator.merge(feeds);            
         }
 

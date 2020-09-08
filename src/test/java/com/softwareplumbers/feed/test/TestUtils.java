@@ -170,7 +170,7 @@ public class TestUtils {
     public static void createReceiver(int id, FeedService service, int count, FeedPath path, Instant from, Map<FeedPath,Message> results) {
         try {
             while (count > 0) {
-                MessageIterator messages = service.listen(path, from).get();
+                MessageIterator messages = service.listen(path, from, service.getServerId()).get();
                 Message current = null;
                 while (messages.hasNext()) {
                     current = messages.next();

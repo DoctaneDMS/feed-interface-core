@@ -21,6 +21,7 @@ import java.util.Iterator;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Predicate;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
 
@@ -55,14 +56,14 @@ public abstract class AbstractFeedService implements FeedService {
         this.bufferPool = new BufferPool((int)poolSize);
         this.bucketSize = bucketSize; 
         this.callbackExecutor = callbackExecutor;
-        this.rootFeed = new AbstractFeed(this);
+        this.rootFeed = new AbstractFeed(createBuffer());
     }
     
     void callback(Runnable callback) {
         callbackExecutor.submit(callback);
     }
     
-    MessageBuffer createBuffer() {
+    final MessageBuffer createBuffer() {
         return bufferPool.createBuffer(clock, bucketSize);
     }
     
@@ -75,22 +76,34 @@ public abstract class AbstractFeedService implements FeedService {
     }
 
     @Override
-    public CompletableFuture<MessageIterator> listen(FeedPath path, Instant from) throws InvalidPath {
+    public CompletableFuture<MessageIterator> listen(FeedPath path, Instant from, UUID serverId) throws InvalidPath {
         LOG.entry(path, from);
-        return LOG.exit(rootFeed.getFeed(path).listen(this, from));
+        return LOG.exit(rootFeed.getFeed(this, path).listen(this, from, serverId));
     }
     
     @Override
-    public MessageIterator sync(FeedPath path, Instant from, UUID serverId) throws InvalidPath {
-        LOG.entry(path, from, serverId);
-        return LOG.exit(rootFeed.getFeed(path).sync(from, false, clock.instant(), true, serverId));
+    public CompletableFuture<MessageIterator> watch(FeedPath path, Instant from) throws InvalidPath {
+        LOG.entry(path, from);
+        return LOG.exit(rootFeed.getFeed(this, path).watch(this, from));
+    }
 
+    @Override
+    public MessageIterator search(FeedPath path, Instant from, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
+        LOG.entry(path, from, serverId);
+        return LOG.exit(rootFeed.getFeed(this, path).search(this, from, serverId, filters));
+
+    }
+    
+    @Override
+    public MessageIterator search(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
+        LOG.entry(path, from, fromInclusive, to, toInclusive, serverId);
+        return LOG.exit(rootFeed.getFeed(this, path).search(this, from, fromInclusive, to, toInclusive, serverId, filters));
     }
     
     @Override
     public Message post(FeedPath path, Message message) throws InvalidPath {
         LOG.entry(path, message);
-        return LOG.exit(rootFeed.getFeed(path).post(message));
+        return LOG.exit(rootFeed.getFeed(this, path).post(this, message));
     }
     
     @Override
@@ -99,10 +112,10 @@ public abstract class AbstractFeedService implements FeedService {
     }
         
     @Override
-    public MessageIterator getMessages(FeedPath path) throws InvalidPath, InvalidId {
+    public MessageIterator search(FeedPath path, Predicate<Message>... filters) throws InvalidPath, InvalidId {
         if (path.isEmpty()) throw new InvalidPath(path);
         String id = path.part.getId().orElseThrow(()->new InvalidId(path.parent, path.part.toString()));
-        return rootFeed.getFeed(path.parent).getMessages(id);
+        return rootFeed.getFeed(this, path.parent).search(this, id, filters);
     }
     
     public void dumpState(FeedPath path, PrintWriter out) throws IOException {
@@ -112,6 +125,5 @@ public abstract class AbstractFeedService implements FeedService {
     }
     
     protected abstract String generateMessageId();
-    protected abstract MessageIterator syncFromBackEnd(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId) throws InvalidPath;   
-    protected abstract void startBackEndListener(FeedPath path, Instant from) throws InvalidPath;
+    protected abstract MessageIterator syncFromBackEnd(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath;   
 }

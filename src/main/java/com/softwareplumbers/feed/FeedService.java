@@ -7,12 +7,10 @@ package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
-import java.io.IOException;
-import java.io.Writer;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Stream;
+import java.util.function.Predicate;
 
 
 /** Feed Service interface.
@@ -24,34 +22,73 @@ import java.util.stream.Stream;
  */
 public interface FeedService {  
     
-    /** Listen for messages on a feed after the given instant.
+    /** Listen for all messages on a feed after the given instant.
      * 
-     * Listen should never return a message with a timestamp less than or
-     * equal to the given instant. However, it may not return all messages which
-     * have a greater timestamp - a limited buffer should be assumed, so setting
-     * Instant to a time significantly before the last message received is
-     * discouraged.
+     * Listen should return all messages with a timestamp greater than 
+     * the given instant. 
      * 
      * @param path Path to feed (must not include a message id)
      * @param after Instant after which we listen for new messages
      * @return Future which will be completed when at least one matching message arrives.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    CompletableFuture<MessageIterator> listen(FeedPath path, Instant after) throws InvalidPath;
+    CompletableFuture<MessageIterator> listen(FeedPath path, Instant after, UUID serverId) throws InvalidPath;
     
-    /** Get messages synchronously.
+    
+    /** Watch for messages on a feed posted to this server after the given instant.
      * 
-     * Sync will return all messages with a timestamp after the given instant. When starting up a client,
-     * or reconnecting after a given server goes down, we use 'sync' to resynchronize the client's view
-     * of events with the view of events as seen by the new server.
+     * Watch is used by remote servers to retrieve messages posted to this server.
      * 
      * @param path Path to feed (must not include a message id)
      * @param from Instant after which we listen for new messages
+     * @return Future which will be completed when at least one matching message arrives.
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
+     */
+    CompletableFuture<MessageIterator> watch(FeedPath path, Instant from) throws InvalidPath;
+    
+    /** Get all messages sharing the given message Id.
+     * 
+     * Typically a message and its related ACKs will share the same message Id. Generally
+     * we expect a message to be acknowledged by each server in the cluster, so this method
+     * can return up to n+1 messages in a cluster with n servers.
+     * 
+     * @param messageId The message Id we are searching for
+     * @return All messages which share the given id.
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidId 
+     */
+    public MessageIterator search(FeedPath messageId, Predicate<Message>... filters) throws InvalidPath, InvalidId;
+
+    /** Get messages synchronously.
+     * 
+     * Search will return all messages with a timestamp after the given instant. The serverId
+     * flag indicates which server the 'from' timestamp came from (since different servers
+     * may  have a different view of time).
+     * v
+     * @param path Path to feed (must not include a message id)
+     * @param from Instant after which we search for new messages
      * @param serverId Server id indicates which server's timestamps to use when comparing with 'from'.
      * @return A MessageIterator WHICH MUST BE CLOSED.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    MessageIterator sync(FeedPath path, Instant from, UUID serverId) throws InvalidPath;
+    MessageIterator search(FeedPath path, Instant from, UUID serverId, Predicate<Message>... filters) throws InvalidPath;
+    
+    /** Get messages synchronously.
+     * 
+     * Sync will return all messages with a timestamp between the given instants. The serverId
+     * flag indicates which server the timestamps came from (since different servers
+     * may  have a different view of time).
+     * 
+     * @param path Path to feed (must not include a message id)
+     * @param from Instant from which we search for new messages
+     * @param fromInclusive indicates that the returned values should include timestamps equal to from
+     * @param to Instant to which we search for new messages
+     * @param toInclusive indicates that the returned values should include timestamps equal to from
+     * @param serverId Server id indicates which server's timestamps to use when comparing with 'from'.
+     * @return A MessageIterator WHICH MUST BE CLOSED.
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
+     */
+    MessageIterator search(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath;
     
     /** Sent a message to a feed.
      * 
@@ -76,5 +113,5 @@ public interface FeedService {
      */
     UUID getServerId();
     
-    public MessageIterator getMessages(FeedPath addId) throws InvalidPath, InvalidId;
+
 }
