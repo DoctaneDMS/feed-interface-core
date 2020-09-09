@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed.test;
 
+import com.softwareplumbers.feed.Cluster;
 import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
@@ -21,20 +22,13 @@ import java.util.function.Predicate;
  * @author jonathan
  */
 public class DummyFeedService extends AbstractFeedService {
-
-    public DummyFeedService(long poolSize, int bucketSize) {
-        super(Executors.newFixedThreadPool(5), poolSize, bucketSize);
-    }
-
-    @Override
-    protected MessageIterator syncFromBackEnd(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) {
-        return MessageIterator.of(Collections.EMPTY_LIST.iterator(), ()->{});
-    }
     
+    public DummyFeedService(Cluster cluster, long poolSize, int bucketSize) {
+        super(cluster, UUID.randomUUID(), Executors.newFixedThreadPool(5), poolSize, bucketSize);
+    }
+
     @Override
     protected String generateMessageId() {
         return UUID.randomUUID().toString();
     }
-
-
 }

@@ -127,7 +127,7 @@ public class TestFeedService {
         CountDownLatch receiverCount = new CountDownLatch(8);
         Map<FeedPath, List<Map<FeedPath,Message>>> receivedMessages = createReceivers(receiverCount, service, feeds, start, 40);
         
-        if (receiverCount.await(60, TimeUnit.SECONDS)) {
+        if (receiverCount.await(20, TimeUnit.SECONDS)) {
             assertThat(receivedMessages.size(), equalTo(feeds.size()));  
 
             for (FeedPath feed : feeds) {

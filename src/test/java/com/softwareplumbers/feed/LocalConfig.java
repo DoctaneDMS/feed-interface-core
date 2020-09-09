@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import com.softwareplumbers.feed.test.DummyCluster;
 import com.softwareplumbers.feed.test.DummyFeedService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,7 +19,7 @@ public class LocalConfig {
     
     @Bean
     FeedService testService() {
-        return new DummyFeedService(100000, 2000);
+        return new DummyFeedService(new DummyCluster(), 100000, 2000);
     }
     
 }

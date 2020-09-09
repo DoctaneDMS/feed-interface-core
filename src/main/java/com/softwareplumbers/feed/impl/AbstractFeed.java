@@ -23,6 +23,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -44,8 +45,15 @@ public class AbstractFeed implements Feed {
     private static class Callback {
         public final CompletableFuture<MessageIterator> future;
         public final Predicate<Message> predicate;
-        public Callback(Predicate<Message> predicate) {
-            this.predicate = predicate;
+        
+        public Callback(Predicate<Message>... predicates) {
+            if (predicates.length == 0) {
+                this.predicate = message->true;
+            } else if (predicates.length == 1) {
+                this.predicate = predicates[0];
+            } else {
+                this.predicate = Stream.of(predicates).reduce(message->true,  Predicate::and);                    
+            }
             this.future = new CompletableFuture<>();
         }
     }
@@ -72,7 +80,7 @@ public class AbstractFeed implements Feed {
     
     public AbstractFeed(MessageBuffer buffer) {
         this.parentFeed = Optional.empty();
-        this.name = Optional.empty();
+        this.name = Optional.empty(); 
         this.buffer = buffer;
     }
     
@@ -85,12 +93,13 @@ public class AbstractFeed implements Feed {
     }
               
     private void trigger(AbstractFeedService service, Message message) {
-        LOG.entry(message);
+        LOG.entry(service, message);
         synchronized(this) {
             Iterator<Map.Entry<Instant, List<Callback>>> activated = callbacks.headMap(message.getTimestamp(), false).entrySet().iterator();
             while (activated.hasNext()) {
                 final Map.Entry<Instant, List<Callback>> entry = activated.next();
                 Instant entryTimestamp = entry.getKey();
+                LOG.trace("Processing callbacks looking for messages after {}", entryTimestamp);
                 activated.remove();
                 for (Callback callback : entry.getValue()) {
                     if (!callback.future.isCancelled()) {
@@ -98,6 +107,7 @@ public class AbstractFeed implements Feed {
                             service.callback(() -> { 
                                 MessageIterator messages = search(service, entryTimestamp, service.getServerId(), callback.predicate);
                                 if (messages.hasNext()) {
+                                    LOG.trace("Completing callback with messages");
                                     callback.future.complete(messages);
                                 } else {
                                     // This shouldn't happen, but... belt and braces.
@@ -108,6 +118,7 @@ public class AbstractFeed implements Feed {
                                 }
                             });
                         } else {
+                            LOG.trace("Callback matched no messages");
                             callbacks.computeIfAbsent(entryTimestamp, key -> new LinkedList()).add(callback);
                         }
                     }
@@ -125,31 +136,14 @@ public class AbstractFeed implements Feed {
     }
 
     @Override
-    public CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId) {
+    public CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
         LOG.entry(service, from, serverId);
-        MessageIterator results = search(service, from, serverId);
+        MessageIterator results = search(service, from, serverId, filters);
         if (results.hasNext()) {
             LOG.debug("Found results, returning immediately");
             return LOG.exit(CompletableFuture.completedFuture(results));
         } else {
-            Callback result = new Callback(m->true);
-            synchronized(this) {
-                callbacks.computeIfAbsent(from, key -> new LinkedList()).add(result);
-            }
-            return LOG.exit(result.future);            
-        }
-    }
-
-    @Override
-    public CompletableFuture<MessageIterator> watch(FeedService service, Instant from) {
-        LOG.entry(service, from);
-        final Predicate<Message> THIS_SERVER = message->message.getServerId().equals(service.getServerId());
-        MessageIterator results = search(service, from, service.getServerId(), THIS_SERVER); 
-        if (results.hasNext()) {
-            LOG.debug("Found results, returning immediately");
-            return LOG.exit(CompletableFuture.completedFuture(results));
-        } else {
-            Callback result = new Callback(THIS_SERVER);
+            Callback result = new Callback(filters);
             synchronized(this) {
                 callbacks.computeIfAbsent(from, key -> new LinkedList()).add(result);
             }
@@ -164,15 +158,13 @@ public class AbstractFeed implements Feed {
         trigger(svc, result);
         return result;
     }
-    
-
-    
+        
     @Override
-    public MessageIterator search(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
+    public MessageIterator search(FeedService service, Instant from, UUID serverId, boolean relay, Predicate<Message>... filters) {
         if (children.isEmpty()) {
-            return search(service, from, false, Instant.MAX, true, serverId);
+            return search(service, from, false, Instant.MAX, true, serverId, relay, filters);
         } else {
-            return search(service, from, false, checkpoint(), true, serverId);
+            return search(service, from, false, checkpoint(), true, serverId, relay, filters);
         }
     }
     
@@ -219,7 +211,7 @@ public class AbstractFeed implements Feed {
     }
     
     @Override
-    public MessageIterator search(FeedService svc, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) {
+    public MessageIterator search(FeedService svc, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, boolean relay, Predicate<Message>... filters) {
         LOG.entry(from, serverId);
         MessageIterator result;
         boolean bufferedDataComplete;
@@ -237,13 +229,13 @@ public class AbstractFeed implements Feed {
         }
         
         
-        if (!bufferedDataComplete) {
+        if (!bufferedDataComplete && relay) {
             try {
                 if (result.hasNext()) {
                     Message first = result.next();
-                    result = MessageIterator.of(service.syncFromBackEnd(getName(), from, fromInclusive, first.getTimestamp(), false, serverId, filters), MessageIterator.of(first), result);
+                    result = MessageIterator.of(relay(service, from, fromInclusive, first.getTimestamp(), false, serverId, filters), MessageIterator.of(first), result);
                 } else {
-                    result = service.syncFromBackEnd(getName(), from, fromInclusive, to, toInclusive, serverId, filters);
+                    result = relay(service, from, fromInclusive, to, toInclusive, serverId, filters);
                 }
             } catch (InvalidPath exp) {
                 // Invalid path shouldn't happen here
@@ -254,14 +246,14 @@ public class AbstractFeed implements Feed {
         if (!children.isEmpty()) {
             Stream<MessageIterator> feeds = Stream.concat(
                 Stream.of(result), 
-                children.values().stream().map(feed->feed.search(service, from, fromInclusive, to, toInclusive, serverId, filters)));
+                children.values().stream().map(feed->feed.search(service, from, fromInclusive, to, toInclusive, serverId, relay, filters)));
             MessageIterator.merge(feeds);            
         }
 
         return LOG.exit(result);
     }
     
-    public void dumpState(PrintWriter out) throws IOException {
+    public void dumpState(PrintWriter out) {
         out.write("Feed: ");
         out.write(getName().toString());
         out.write("\n");
@@ -275,4 +267,22 @@ public class AbstractFeed implements Feed {
         Stream<AbstractFeed> result = children.values().stream().flatMap(AbstractFeed::getLiveFeeds);
         return buffer.isEmpty() ? result : Stream.concat(Stream.of(this), result);
     }
+    
+    public MessageIterator relay(AbstractFeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
+        MessageIterator result = MessageIterator.EMPTY;
+        try (Stream<FeedService> remotes = service.getCluster().getServices(remote -> !Objects.equals(service.getServerId(), remote.getServerId()))) {
+            for (FeedService remote : (Iterable<FeedService>)remotes::iterator) {
+                MessageIterator.Peekable remoteResult = remote.search(getName(), from, fromInclusive, to, toInclusive, serverId, false, filters).peekable();
+                Instant remoteFrom = remoteResult.peek().map(message->message.getTimestamp()).orElse(Instant.MAX);
+                if (toInclusive && !remoteFrom.isAfter(to) || remoteFrom.isBefore(to)) {
+                    result = MessageIterator.of(remoteResult, result);
+                    to = remoteFrom;
+                    toInclusive = false;
+                }
+            }
+        }
+        return result;
+    }  
+    
+
 }

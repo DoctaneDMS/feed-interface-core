@@ -22,4 +22,6 @@ public interface Cluster {
     }
     
     Stream<FeedService> getServices(Predicate<FeedService>... filters);
+    
+    void init(FeedService service);
 }

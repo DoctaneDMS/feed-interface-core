@@ -10,7 +10,6 @@ import static com.softwareplumbers.feed.FeedExceptions.runtime;
 import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.Message;
 import java.io.PrintWriter;
-import java.io.Writer;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Iterator;
@@ -18,7 +17,6 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.slf4j.ext.XLogger;
@@ -105,7 +103,7 @@ public class MessageBuffer {
     }
     
     public Optional<Instant> firstTimestamp() {
-        return bucketCache.isEmpty() ? Optional.empty() : Optional.of(bucketCache.firstEntry().getValue().firstTimestamp());
+        return Optional.ofNullable(bucketCache.firstEntry()).flatMap(entry->entry.getValue().firstTimestamp());
     }
     
     /** Get messages after a given timestamp.
@@ -180,12 +178,28 @@ public class MessageBuffer {
 
     void deallocateBucket(Bucket bucket) {
         LOG.entry(bucket);
-        Map<Instant, Bucket> toRemove = bucketCache.headMap(bucket.firstTimestamp(), true);
+        // 99.9% of the time we are deallocating old buckets which are nowhere near the insertion point on the buffer.
+        // However, this gets very sticky if we have an inactive feed; we could then potentially be trying to deallocate
+        // the topmost bucket in the buffer. Which has significant concurrency implications. So what we do is just refuse
+        // to deallocate the 'current' bucket if we are asked. We call pool.reallocateBucket instead.
+        Map<Instant, Bucket> toRemove;
+        synchronized(this) {
+            if (bucket == current) {
+                pool.reallocateBucket(bucket);
+                toRemove = bucketCache.headMap(bucketCache.firstKey(), false);
+            } else {
+                toRemove = bucketCache.headMap(bucket.firstTimestamp().orElseThrow(()->new RuntimeException("tying to delete bucket with no entries")), true);
+            }
+        }
+        
         pool.releaseBuckets(toRemove.values());
         // toRemove.clear() is not necessarily atomic, and we want to ensure elements are remove
         // from first to last in order to maintain consistency.
         Iterator<Map.Entry<Instant,Bucket>> iterator = toRemove.entrySet().iterator();
-        while(iterator.hasNext()) { iterator.next(); iterator.remove(); }
+        while(iterator.hasNext()) { 
+            iterator.next(); 
+            iterator.remove(); 
+        }
         LOG.exit();
     }    
 }

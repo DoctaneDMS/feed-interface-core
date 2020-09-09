@@ -7,6 +7,7 @@ package com.softwareplumbers.feed.impl.buffer;
 
 import com.softwareplumbers.feed.Message;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
@@ -77,6 +78,27 @@ public class BufferPool {
                 count--;
                 LOG.debug("pool size: {}", currentSize.addAndGet(-registration.bucket.size()));
                 registrations.remove();
+            }
+        }
+        LOG.exit();
+    }
+
+    /** Provide a way to continue using an old bucket.
+     * 
+     * TODO: refactor MessageBuffer so a buffer can exist with no buckets in it. Then this is not needed.
+     * 
+     * @param bucket Bucket to reallocate.
+     */
+    void reallocateBucket(Bucket bucket) {
+        LOG.entry(bucket);
+        boolean more = true;
+        Iterator<BucketRegistration> registrations = registry.iterator();
+        while (registrations.hasNext() && more) {
+            BucketRegistration registration = registrations.next();
+            if (bucket == registration.bucket) {
+                more = false;
+                registrations.remove();
+                registry.add(registration);
             }
         }
         LOG.exit();

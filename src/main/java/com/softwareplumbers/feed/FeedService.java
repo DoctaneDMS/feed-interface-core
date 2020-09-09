@@ -30,22 +30,25 @@ public interface FeedService {
      * @param path Path to feed (must not include a message id)
      * @param after Instant after which we listen for new messages
      * @param serverId Server id indicates which server's timestamps to use when comparing with 'from'.
+     * @param filters Predicates which will filter the returned message stream.
      * @return Future which will be completed when at least one matching message arrives.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    CompletableFuture<MessageIterator> listen(FeedPath path, Instant after, UUID serverId) throws InvalidPath;
+    CompletableFuture<MessageIterator> listen(FeedPath path, Instant after, UUID serverId, Predicate<Message>... filters) throws InvalidPath;
     
     
     /** Watch for messages on a feed posted to this server after the given instant.
      * 
-     * Watch is used by remote servers to retrieve messages posted to this server.
+     * Watch is used by remote servers to retrieve messages posted to this server. If we are not already 
+     * watching watcherServerId, we will watch it back.
      * 
-     * @param path Path to feed (must not include a message id)
-     * @param from Instant after which we listen for new messages
+     * @param watcherServerId ServerId of watching server
+     * @param after instant from which to fetch results
      * @return Future which will be completed when at least one matching message arrives.
-     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    CompletableFuture<MessageIterator> watch(FeedPath path, Instant from) throws InvalidPath;
+    CompletableFuture<MessageIterator> watch(UUID watcherServerId, Instant after);
+        
+    void registerRemote(FeedService service);
     
     /** Get all messages sharing the given message Id.
      * 

@@ -19,6 +19,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Stream;
@@ -141,8 +142,8 @@ class Bucket {
         }
     }
     
-    Instant firstTimestamp() {
-        return timeIndex.firstKey();
+    Optional<Instant> firstTimestamp() {
+        return timeIndex.isEmpty() ? Optional.empty() : Optional.of(timeIndex.firstKey());
     }
     
     boolean isEmpty() {

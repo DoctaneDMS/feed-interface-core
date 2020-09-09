@@ -33,30 +33,14 @@ public interface Feed {
      * @param serverId Server at which the from timestamp was retrieved
      * @return Future which will complete when messages are received
      */
-    default CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId) {
+    default CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
         try {
-            return service.listen(getName(), from, serverId);
+            return service.listen(getName(), from, serverId, filters);
         } catch (FeedExceptions.InvalidPath e) {
             throw new FeedExceptions.BaseRuntimeException(e);
         }
     }
-    
-    /** Convenience method for receiving messages related to this feed that are posted to this server
-     * 
-     * Should be the same as calling service.watch(this.getName(), from)
-     * 
-     * @param service Service from which to receive messages
-     * @param from Timestamp after which we are interested in messages
-     * @return Future which will complete when messages are received
-     */
-    default CompletableFuture<MessageIterator> watch(FeedService service, Instant from) {
-        try {
-            return service.watch(getName(), from);
-        } catch (FeedExceptions.InvalidPath e) {
-            throw new FeedExceptions.BaseRuntimeException(e);
-        }
-    }    
-    
+        
     /** Convenience method for posting messages to this feed.
      * 
      * Should be the same as calling service.post(this.getName, message)
@@ -114,5 +98,5 @@ public interface Feed {
     
     default MessageIterator search(FeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) {
         return search(service, from, fromInclusive, to, toInclusive, serverId, true, filters);
-    }    
+    }
 }
