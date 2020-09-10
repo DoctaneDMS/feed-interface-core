@@ -16,8 +16,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
@@ -33,9 +38,9 @@ public class TestMessageIterator {
     
     @Test
     public void testSequence() {
-        Map<FeedPath,Message> messages1 = generateMessages(3,2,randomFeedPath(),m->m);
-        Map<FeedPath,Message> messages2 = generateMessages(4,2,randomFeedPath(),m->m);
-        Map<FeedPath,Message> messages3 = generateMessages(5,2,randomFeedPath(),m->m);
+        Map<FeedPath,Message> messages1 = generateMessages(3,2,randomFeedPath(),m->m).collect(Collectors.toMap(m->m.getName(), m->m));
+        Map<FeedPath,Message> messages2 = generateMessages(4,2,randomFeedPath(),m->m).collect(Collectors.toMap(m->m.getName(), m->m));
+        Map<FeedPath,Message> messages3 = generateMessages(5,2,randomFeedPath(),m->m).collect(Collectors.toMap(m->m.getName(), m->m));
         
         MessageIterator seq = MessageIterator.of(
             MessageIterator.of(messages1.values().iterator(), ()->{}),
@@ -61,7 +66,7 @@ public class TestMessageIterator {
 
     @Test
     public void testPeekable() {
-        Map<FeedPath,Message> messages1 = generateMessages(3,2,randomFeedPath(),m->m);
+        Map<FeedPath,Message> messages1 = generateMessages(3,2,randomFeedPath(),m->m).collect(Collectors.toMap(m->m.getName(), m->m));
         
         MessageIterator.Peekable seq = MessageIterator.of(messages1.values().iterator(), ()->{}).peekable();
         
@@ -75,22 +80,22 @@ public class TestMessageIterator {
     }
     
     @Test
-    public void testMerge() throws InterruptedException {
+    public void testMerge() throws InterruptedException, ExecutionException, TimeoutException {
         
         final int THREADS = 2;
         final int MESSAGES = 20;
-        CountDownLatch receiving = new CountDownLatch(3 * THREADS * MESSAGES);
         
-        Collection<Message> messages1 = generateMessages(2,20,2,getFeeds(),m->{ receiving.countDown(); return m; }).values();
-        Collection<Message> messages2 = generateMessages(2,20,2,getFeeds(),m->{ receiving.countDown(); return m; }).values();
-        Collection<Message> messages3 = generateMessages(2,20,2,getFeeds(),m->{ receiving.countDown(); return m; }).values();
-        
-        receiving.await(10, TimeUnit.SECONDS);
+        CompletableFuture<List<Message>> messages1 = generateMessages(2, 20, 2, getFeeds(),m->m)
+            .thenApply(stream->stream.sorted(Comparator.comparing(Message::getTimestamp)).collect(Collectors.toList()));
+        CompletableFuture<List<Message>> messages2 = generateMessages(2, 20, 2, getFeeds(),m->m)
+            .thenApply(stream->stream.sorted(Comparator.comparing(Message::getTimestamp)).collect(Collectors.toList()));
+        CompletableFuture<List<Message>> messages3 = generateMessages(2, 20, 2, getFeeds(),m->m)
+            .thenApply(stream->stream.sorted(Comparator.comparing(Message::getTimestamp)).collect(Collectors.toList()));
         
         MessageIterator seq = MessageIterator.merge(
-            MessageIterator.of(messages1.stream().sorted(Comparator.comparing(Message::getTimestamp))),
-            MessageIterator.of(messages2.stream().sorted(Comparator.comparing(Message::getTimestamp))),
-            MessageIterator.of(messages3.stream().sorted(Comparator.comparing(Message::getTimestamp)))
+            MessageIterator.of(messages1.get(10, TimeUnit.SECONDS).stream()),
+            MessageIterator.of(messages2.get(10, TimeUnit.SECONDS).stream()),
+            MessageIterator.of(messages3.get(10, TimeUnit.SECONDS).stream())
         );
         
         Set<FeedPath> received = new TreeSet<>();
@@ -104,15 +109,15 @@ public class TestMessageIterator {
             received.add(message.getName());
         }
         
-        for (Message message : messages1) {
+        for (Message message : messages1.get()) {
             assertThat(received, hasItem(message.getName()));
         }
 
-        for (Message message : messages2) {
+        for (Message message : messages2.get()) {
             assertThat(received, hasItem(message.getName()));
         }
         
-        for (Message message : messages3) {
+        for (Message message : messages3.get()) {
             assertThat(received, hasItem(message.getName()));
         }        
     }

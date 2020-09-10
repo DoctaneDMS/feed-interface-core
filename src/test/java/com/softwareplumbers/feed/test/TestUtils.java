@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed.test;
 
+import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.common.pipedstream.OutputStreamConsumer;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import com.softwareplumbers.feed.FeedExceptions.StreamingException;
@@ -34,6 +35,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -41,12 +43,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.json.Json;
 import javax.json.JsonObject;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.Assert.fail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.io.ByteArrayOutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  *
@@ -132,52 +138,44 @@ public class TestUtils {
         }
     }
     
-    public static NavigableMap<FeedPath,Message> generateMessages(int count, int maxPause, FeedPath path, Function<Message, Message> messageConsumer) {
-        NavigableMap<FeedPath,Message> result = new TreeMap<>();
+    public static Stream<Message> generateMessages(int count, int maxPause, FeedPath path, Function<Message, Message> messageConsumer) {
+        ArrayList<Message> messages = new ArrayList(count);
         for (int i = 0; i < count; i++) {
             Message message = generateMessage(path);
-            result.put(message.getName(), messageConsumer.apply(message));
+            messages.add(messageConsumer.apply(message));
             randomPause(maxPause);
         }
-        return result;
+        return messages.stream();
     }
     
-    public static NavigableMap<FeedPath,Message> generateMessages(int threads, int count, int maxPause, List<FeedPath> feeds, Function<Message, Message> messageConsumer) {
-        ConcurrentSkipListMap<FeedPath,Message> result = new ConcurrentSkipListMap<>();
+    public static CompletableFuture<Stream<Message>> generateMessagesAsync(int count, int maxPause, FeedPath path, Function<Message, Message> messageConsumer) {
+        return CompletableFuture.supplyAsync(()->generateMessages(count, maxPause, path, messageConsumer));        
+    }
+    
+    public static CompletableFuture<Stream<Message>> generateMessages(int threads, int count, int maxPause, List<FeedPath> feeds, Function<Message, Message> messageConsumer) {
+        CompletableFuture<Stream<Message>> result = CompletableFuture.completedFuture(Stream.of());
         for (int i = 0; i < threads; ) {
             for (int j = 0; j < feeds.size() && i < threads; j++, i++) {
                 FeedPath feed = feeds.get(j);
-                new Thread(() -> {
-                    for (int k = 0; k < count; k++) {
-                        Message message = generateMessage(feed);
-                        result.put(message.getName(), messageConsumer.apply(message));
-                        randomPause(maxPause);
-                    }
-                }).start();
+                result = result.thenCombine(generateMessagesAsync(count, maxPause, feed, messageConsumer), (a,b)->Stream.concat(a, b));
             }
         }
         return result;
     }  
-    
-    public static Map<FeedPath,Message> getMessagesForFeed(FeedPath path, NavigableMap<FeedPath,Message> messages) {
-        return messages.values().stream()
-            .filter(msg->msg.getName().startsWith(path))
-            .collect(Collectors.toMap(Message::getName, Function.identity()));
-    }
-   
-    
+     
     public static List<FeedPath> getFeeds() {
         return Collections.unmodifiableList(Arrays.asList(FEEDS));
     }
     
-    public static void createReceiver(int id, FeedService service, int count, FeedPath path, Instant from, Map<FeedPath,Message> results) throws TimeoutException {
+    public static Stream<Message> createReceiver(int id, FeedService service, int count, FeedPath path, Instant from) {
+        ArrayList<Message> results = new ArrayList<>(count);
         try {
             while (count > 0) {
                 MessageIterator messages = service.listen(path, from, service.getServerId()).get(5, TimeUnit.SECONDS);
                 Message current = null;
                 while (messages.hasNext()) {
                     current = messages.next();
-                    results.put(current.getName(), current);
+                    results.add(current);
                     LOG.debug("receiver {} munched: {} - {}", id, current.getName(), current.getTimestamp());
                     count--;                
                 }
@@ -185,9 +183,14 @@ public class TestUtils {
                 if (current != null) from = current.getTimestamp();
             }
             LOG.debug("receiver {} complete", id);
-        } catch (InterruptedException | InvalidPath | ExecutionException e) {
+        } catch (TimeoutException | InterruptedException | InvalidPath | ExecutionException e) {
             LOG.error("Error in receiver ", e);
         }
+        return results.stream();
+    }
+    
+    public static CompletableFuture<Stream<Message>> createReceiverAsync(int id, FeedService service, int count, FeedPath path, Instant from) {
+        return CompletableFuture.supplyAsync(()->createReceiver(id, service, count, path, from));
     }
     
     public static void createReceiver(int id, MessageBuffer buffer, int count, Instant from, Map<FeedPath,Message> results) {
@@ -204,10 +207,22 @@ public class TestUtils {
         }
     }
     
-    public static Set<FeedPath> getDifference(Map<FeedPath,Message> sent, Map<FeedPath,Message> received) {
-        Set<FeedPath> sentButNotReceived = new TreeSet<>(sent.keySet());
-        sentButNotReceived.removeAll(received.keySet());      
-        return sentButNotReceived;
+    private static String dumpMessage(Message message) {
+        try {
+            ByteArrayOutputStream os = new ByteArrayOutputStream();
+            OutputStreamConsumer.of(message::toStream).consume(os);
+            return os.toString();
+        } catch (IOException e) {
+            return message.toString();
+        }
+    }
+        
+    
+    public static Map<FeedPath,String> getDifference(Stream<Message> sent, Stream<Message> received) {
+        Map<FeedPath,String> diff = new TreeMap<>();
+        sent.forEach(message->diff.put(message.getName(), "NOT RECEIVED: " + dumpMessage(message)));
+        received.forEach(message->diff.merge(message.getName(), "NOT SENT: " + dumpMessage(message), (o,n)->null));
+        return diff;
     }
 
     public static int compare(Message a, Message b) {
@@ -225,14 +240,20 @@ public class TestUtils {
         received.forEach((k,v)->sentButNotReceived.remove(v));
         return new TreeSet(sentButNotReceived.values());
     }
-    
-    public static void assertMapsEqual(Map<FeedPath,Message> sent, Map<FeedPath,Message> received) {
-        assertThat(getDifference(sent, received), empty());      
+       
+    public static void assertMatch(Stream<Message> sent, Stream<Message> received) {
+        AtomicInteger sentCount = new AtomicInteger(0);
+        AtomicInteger receivedCount = new AtomicInteger(0);
+        Map<FeedPath, String> difference = getDifference(sent.peek(message->sentCount.incrementAndGet()), received.peek(message->receivedCount.incrementAndGet()));
+        if (difference.size() > 0) {
+            showDifference(difference);
+            fail("Sent and received messages do not match; sent " + sentCount + " and received " + receivedCount); 
+        }
     }
     
-    public static void showMissing(Map<FeedPath,Message> sent, Map<FeedPath,Message> received) {
-        for (FeedPath missing : getDifference(sent, received)) {
-            System.out.println(sent.get(missing));
+    public static void showDifference(Map<FeedPath, String> difference) {
+        for (Map.Entry<FeedPath,String> entry : difference.entrySet()) {
+            System.out.println(entry.getValue() + ":" + entry.getKey());
         }
     }
     
@@ -251,30 +272,25 @@ public class TestUtils {
         return results;
     }  
     
-    public static Map<FeedPath,List<Map<FeedPath,Message>>> createReceivers(CountDownLatch receivers, FeedService service, List<FeedPath> feeds, Instant from, int count) {
-        Map<FeedPath,List<Map<FeedPath,Message>>> results = new TreeMap<>();
-        long createCount = receivers.getCount();
-        for (int i = 0; i < createCount; ) {
-            for (int j = 0; i < createCount && j < feeds.size(); j++, i++) {
-                List<Map<FeedPath,Message>> result = results.computeIfAbsent(feeds.get(j), fm->new ArrayList<>());
-                Map<FeedPath,Message> resultMap = new ConcurrentSkipListMap<>();
-                result.add(resultMap);
-                final int id =  i;
-                final int k = j; // FUCK JAVA LAMBDAS
-                new Thread(()-> {
-                    try {
-                        TestUtils.createReceiver(id, service, count, feeds.get(k), from, resultMap);
-                    } catch (TimeoutException e) {
-                        LOG.error("Listener timed out");
-                    }
-                    receivers.countDown();
-                }).start();
+    public static class Receiver {
+        public final FeedPath feed;
+        public final Stream<Message> messages;
+        public Receiver(FeedPath feed, Stream<Message> messages) { this.feed = feed; this.messages = messages; }
+    }
+    
+    public static CompletableFuture<List<Receiver>> createReceivers(int receivers, FeedService service, List<FeedPath> feeds, Instant from, int count) {
+        CompletableFuture<List<Receiver>> result = CompletableFuture.completedFuture(new ArrayList<>());
+        for (int i = 0; i < receivers; ) {
+            for (int j = 0; i < receivers && j < feeds.size(); j++, i++) {
+                FeedPath feed = feeds.get(j);
+                CompletableFuture<Stream<Message>> receiver = createReceiverAsync(i, service, count, feed, from);
+                result = result.thenCombine(receiver, (array,stream)-> { array.add(new Receiver(feed, stream)); return array; });
             }
         }
-        return results;
+        return result;
     }  
     
-    public static Map<FeedPath, Message> generateBinaryMessageStream(int count, OutputStream bos) {
+    public static Stream<Message> generateBinaryMessageStream(int count, OutputStream bos) {
         return generateMessages(count, 0, randomFeedPath(), msg-> { 
             try {
                 msg.writeHeaders(bos);

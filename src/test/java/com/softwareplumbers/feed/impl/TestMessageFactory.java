@@ -14,15 +14,14 @@ import static com.softwareplumbers.feed.test.TestUtils.asString;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.time.Instant;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.Assert.assertEquals;
 import static com.softwareplumbers.feed.test.TestUtils.*;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import javax.json.JsonValue;
 import static org.hamcrest.Matchers.*;
 import org.junit.Test;
@@ -72,7 +71,7 @@ public class TestMessageFactory {
     public void testIteratorFromStream() throws IOException, InvalidJson, FeedExceptions.StreamingException {
         
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        Map<FeedPath, Message> messages = generateBinaryMessageStream(20, bos);
+        Map<FeedPath, Message> messages = generateBinaryMessageStream(20, bos).collect(Collectors.toMap(Message::getName, m->m));
         
         MessageIterator iterator = new MessageFactory().buildIterator(new ByteArrayInputStream(bos.toByteArray()), Optional.empty());
         int count = 0;
@@ -88,7 +87,7 @@ public class TestMessageFactory {
     @Test
     public void testConsumerFromStream() throws IOException, InvalidJson, FeedExceptions.StreamingException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        Map<FeedPath, Message> messages = generateBinaryMessageStream(20, bos);
+        Map<FeedPath, Message> messages = generateBinaryMessageStream(20, bos).collect(Collectors.toMap(Message::getName, m->m));
         new MessageFactory().consume(new ByteArrayInputStream(bos.toByteArray()), message->{
             assertThat(messages, hasEntry(message.getName(), message));
             assertThat(asString(message.getData()), equalTo(asString(messages.get(message.getName()).getData())));

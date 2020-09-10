@@ -157,10 +157,18 @@ public class AbstractFeed implements Feed {
     public Message post(FeedService service, Message message) {
         LOG.entry(getName(), service, message);
         AbstractFeedService svc = cast(service);
-        message = message.setName(getName().addId(svc.generateMessageId()));
-        if (!message.getServerId().isPresent()) message = message.setServerId(service.getServerId());
+        message = message
+            .setName(getName().addId(svc.generateMessageId()))
+            .setServerId(service.getServerId());
         Message result = buffer.addMessage(message);
         trigger(svc, result);
+        return LOG.exit(result);
+    }
+    
+    public Message replicate(AbstractFeedService service, Message message) {
+        LOG.entry(getName(), service, message);
+        Message result = buffer.addMessage(message);
+        trigger(service, result);
         return LOG.exit(result);
     }
         

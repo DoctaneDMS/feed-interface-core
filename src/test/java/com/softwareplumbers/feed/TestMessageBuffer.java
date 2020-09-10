@@ -9,6 +9,7 @@ import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import com.softwareplumbers.feed.impl.MessageImpl;
 import com.softwareplumbers.feed.impl.buffer.BufferPool;
 import com.softwareplumbers.feed.impl.buffer.MessageClock;
+import com.softwareplumbers.feed.test.TestUtils;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,12 +28,17 @@ import static org.junit.Assert.fail;
 
 import static com.softwareplumbers.feed.test.TestUtils.*;
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 import static org.hamcrest.MatcherAssert.assertThat;
+import org.hamcrest.Matchers;
 
 /**
  *
@@ -112,7 +118,7 @@ public class TestMessageBuffer {
         MessageBuffer testBuffer = pool.createBuffer(new MessageClock(), 1024);
         Instant first = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> messages = generateMessages(count, 2, randomFeedPath(), message->testBuffer.addMessage(message.setServerId(UUID.randomUUID())));
+        Map<FeedPath,Message> messages = generateMessages(count, 2, randomFeedPath(), message->testBuffer.addMessage(message.setServerId(UUID.randomUUID()))).collect(Collectors.toMap(m->m.getName(), m->m));
         testBuffer.dumpState(new PrintWriter(System.out));
         System.out.println("****Getting messages from " + first + " ****");
         List<Message> result = testBuffer.getMessagesAfter(first).toStream().collect(Collectors.toList());
@@ -141,7 +147,7 @@ public class TestMessageBuffer {
         MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant first = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> generated = generateMessages(40, 2, randomFeedPath(), message->buffer.addMessage(message.setServerId(UUID.randomUUID())));
+        Stream<Message> messages = generateMessages(40, 2, randomFeedPath(), message->buffer.addMessage(message.setServerId(UUID.randomUUID())));
         // pool size should be greater than maximum
         assertThat(pool.getSize(), greaterThan(messageSize * 20L));
         buffer.dumpState(new PrintWriter(System.out));
@@ -156,25 +162,26 @@ public class TestMessageBuffer {
     }
     
     @Test
-    public void testMulthreadedAdd() throws IOException, InterruptedException {
+    public void testMulthreadedAdd() throws IOException, InterruptedException, ExecutionException {
         BufferPool pool = new BufferPool(100000);
         MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant start = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message.setServerId(UUID.randomUUID()))); 
+        CompletableFuture<Stream<Message>> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message.setServerId(UUID.randomUUID()))); 
         int receivedCount = 0;
+        ArrayList<Message> receiveds = new ArrayList<>(100);
         while (receivedCount < 100) {
             Thread.sleep(5);
             try (MessageIterator messages = buffer.getMessagesAfter(start)) {
                 while (messages.hasNext()) {
                     Message received = messages.next();
+                    receiveds.add(received);
                     receivedCount++;
                     start = received.getTimestamp();
-                    assertThat(generated, hasEntry(received.getName(), received));
-                    generated.remove(received.getName());
                 }
             }
         }    
+        assertMatch(generated.get(), receiveds.stream());
     }
        
     @Test
@@ -183,30 +190,30 @@ public class TestMessageBuffer {
         MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant start = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, Collections.singletonList(randomFeedPath()), message->buffer.addMessage(message.setServerId(UUID.randomUUID())));         
+        CompletableFuture<Stream<Message>> generated = generateMessages(5, 20, 5, Collections.singletonList(randomFeedPath()), message->buffer.addMessage(message.setServerId(UUID.randomUUID())));         
         Map<FeedPath,Message> results = new TreeMap<>();
         createReceiver(1, buffer, 100, start, results);
-        assertMapsEqual(generated, results);
+        TestUtils.assertMatch(generated.get(), results.values().stream());
     }
     
     @Test
-    public void testCallbackMultipleReceivers() throws InterruptedException {
+    public void testCallbackMultipleReceivers() throws InterruptedException, ExecutionException, TimeoutException {
         BufferPool pool = new BufferPool(100000);
         MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant start = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message.setServerId(UUID.randomUUID()))); 
+        CompletableFuture<List<Message>> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message.setServerId(UUID.randomUUID()))).thenApply(stream->stream.collect(Collectors.toList())); 
         CountDownLatch receiving = new CountDownLatch(3);
         List<Map<FeedPath,Message>> results = createReceivers(receiving, buffer, start, 100);
         if (receiving.await(20, TimeUnit.SECONDS)) {
             for (Map<FeedPath,Message> resultMap : results) {
-                assertMapsEqual(generated, resultMap);
+                assertMatch(generated.get(10, TimeUnit.SECONDS).stream(), resultMap.values().stream());
             }
         } else {
             dumpThreads();
             buffer.dumpState(new PrintWriter(System.out));
             for (Map<FeedPath,Message> resultMap : results) {
-                showMissing(generated, resultMap);
+                showDifference(getDifference(generated.get(10, TimeUnit.SECONDS).stream(), resultMap.values().stream()));
             }
             fail("receivers timed out");            
         }

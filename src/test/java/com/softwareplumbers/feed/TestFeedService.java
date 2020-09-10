@@ -24,8 +24,12 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.fail;
@@ -57,7 +61,7 @@ public class TestFeedService {
         Instant start = Instant.now();
         Thread.sleep(10);
         Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
-        generateMessages(1000, 2, path, this::post).forEach((k,v)->sentMessages.add(v));
+        generateMessages(1000, 2, path, this::post).forEach(message->sentMessages.add(message));
         List<FeedPath> feeds = getFeeds();
         //service.dumpState();
         assertThat(sentMessages.size(), equalTo(1000));
@@ -99,58 +103,40 @@ public class TestFeedService {
     }
     
     @Test
-    public void testMessagesForFeed() throws InterruptedException {
+    public void testMessagesForFeed() throws InterruptedException, ExecutionException, TimeoutException {
         //more of a test-of-test fixture 
-        CountDownLatch latch = new CountDownLatch(800);
-        NavigableMap<FeedPath, Message> sentMessages = generateMessages(4, 200, 2, getFeeds(), m->{ latch.countDown(); return m; });
-        assertThat(latch.await(20, TimeUnit.SECONDS), equalTo(true));
+        List<Message> sentMessages = generateMessages(4, 200, 2, getFeeds(), m->m).get(10, TimeUnit.SECONDS).collect(Collectors.toList());
          // necessary because the latch countdown happens before the message is added to the send message map.
          // this isn't the idea solution but it's only test code.
-        Thread.sleep(10);
         assertThat(sentMessages.size(), equalTo(800));
-        assertThat(getMessagesForFeed(getFeeds().get(0), sentMessages).size(), equalTo(200));
-        assertThat(getMessagesForFeed(getFeeds().get(1), sentMessages).size(), equalTo(200));
-        assertThat(getMessagesForFeed(getFeeds().get(2), sentMessages).size(), equalTo(200));
-        assertThat(getMessagesForFeed(getFeeds().get(3), sentMessages).size(), equalTo(200));
+        assertThat(sentMessages.stream().filter(message->message.getFeedName().equals(getFeeds().get(0))).count(), equalTo(200L));
+        assertThat(sentMessages.stream().filter(message->message.getFeedName().equals(getFeeds().get(1))).count(), equalTo(200L));
+        assertThat(sentMessages.stream().filter(message->message.getFeedName().equals(getFeeds().get(2))).count(), equalTo(200L));
+        assertThat(sentMessages.stream().filter(message->message.getFeedName().equals(getFeeds().get(3))).count(), equalTo(200L));
         
     }
     
     @Test
-    public void testMessageRoundtripMultipleThreads() throws IOException, InvalidPath, InterruptedException {
+    public void testMessageRoundtripMultipleThreads() throws IOException, InvalidPath, InterruptedException, ExecutionException {
         
         Instant start = Instant.now();
 
         // 8 threads each writing 20 messages split across 4 feeds
-        NavigableMap<FeedPath, Message> sentMessages = generateMessages(8, 20, 2, getFeeds(), this::post); 
+        CompletableFuture<Stream<Message>> sentMessages = generateMessages(8, 20, 2, getFeeds(), this::post); 
         List<FeedPath> feeds = getFeeds();
         // 8 receivers split across 4 feeds, each should receive all the messages sent to a single feed.
-        CountDownLatch receiverCount = new CountDownLatch(8);
-        Map<FeedPath, List<Map<FeedPath,Message>>> receivedMessages = createReceivers(receiverCount, service, feeds, start, 40);
-        
-        if (receiverCount.await(20, TimeUnit.SECONDS)) {
-            assertThat(receivedMessages.size(), equalTo(feeds.size()));  
+        try {
+            List<Receiver> receivers = createReceivers(8, service, feeds, start, 40).get(20, TimeUnit.SECONDS);
 
-            for (FeedPath feed : feeds) {
-                receivedMessages.get(feed).forEach(map->{
-                   Set<FeedPath> dropped = getDifferenceIgnoringId(getMessagesForFeed(feed, sentMessages), map);
-                   assertThat(dropped, hasSize(0));
-                });
+            assertThat(receivers.size(), equalTo(8));  
+            
+            List<Message> sentList = sentMessages.get().collect(Collectors.toList());
+
+            for (Receiver results : receivers) {
+                TestUtils.assertMatch(sentList.stream().filter(m->m.getFeedName().equals(results.feed)), results.messages);
             }            
-        } else {
-            System.out.println("receiverCount " + receiverCount.getCount());
-            for (FeedPath feed : receivedMessages.keySet()) {
-                dumpThreads();
-                List<Map<FeedPath,Message>> receivers = receivedMessages.get(feed);
-                for (int i = 0; i < receivers.size(); i++) {
-                    Map<FeedPath, Message> map = receivers.get(i);
-                    System.out.println("receiver " + i + " has " + map.size() + " messages for " + feed);
-                    Map<FeedPath, Message> sent = getMessagesForFeed(feed, sentMessages);
-                    Set<FeedPath> dropped = getDifferenceIgnoringId(sent, map);
-                    for (FeedPath path : dropped) {
-                        System.out.println("lost message " + path + "[" + sent.get(path) + "]");
-                    }
-                }
-            }
+        } catch(TimeoutException exp) {
+            dumpThreads();
             fail("timed out");
         }
  

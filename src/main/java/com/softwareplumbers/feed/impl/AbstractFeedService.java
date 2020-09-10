@@ -196,11 +196,12 @@ public abstract class AbstractFeedService implements FeedService {
                 errorCount++;
             } else {
                 Message message = null;
+                AbstractFeedService local = AbstractFeedService.this;
                 try {
                     while (messages.hasNext()) {
                         message = messages.next();
                         receivedCount++;
-                        post(message.getFeedName(), message);
+                        rootFeed.getFeed(local, message.getFeedName()).replicate(local, message);
                     }
                     remote.watch(getServerId(), message.getTimestamp()).whenCompleteAsync(this::monitorCallback);
                 } catch (Exception exp) {
