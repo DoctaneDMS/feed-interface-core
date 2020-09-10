@@ -9,6 +9,7 @@ import com.softwareplumbers.feed.test.DummyCluster;
 import com.softwareplumbers.feed.test.DummyFeedService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 
 /**
  *
@@ -19,7 +20,29 @@ public class LocalConfig {
     
     @Bean
     FeedService testService() {
-        return new DummyFeedService(new DummyCluster(), 100000, 2000);
+        return new DummyFeedService(100000, 2000);
+    }
+    
+    @Bean
+    @Scope("singleton")
+    Cluster testSimpleCluster() {
+        return new DummyCluster();
+    }
+    
+    @Bean
+    @Scope("singleton")
+    FeedService testSimpleClusterNodeA() {
+        FeedService nodeA = new DummyFeedService(100000, 2000);
+        testSimpleCluster().register(nodeA);
+        return nodeA;
+    }
+
+    @Bean
+    @Scope("singleton")
+    FeedService testSimpleClusterNodeB() {
+        FeedService nodeB = new DummyFeedService(100000, 2000);
+        testSimpleCluster().register(nodeB);
+        return nodeB;
     }
     
 }

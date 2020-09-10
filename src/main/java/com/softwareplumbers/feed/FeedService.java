@@ -47,8 +47,19 @@ public interface FeedService {
      * @return Future which will be completed when at least one matching message arrives.
      */
     CompletableFuture<MessageIterator> watch(UUID watcherServerId, Instant after);
-        
-    void registerRemote(FeedService service);
+       
+    /** Provides cluster details to the feed service.
+     * 
+     * A feed service is registered to a cluster with Cluster.register(service). Later,
+     * the cluster will call back FeedService.initialize(cluster); Cluster guarantees
+     * that initialize will be called at most once and that the service is fully registered
+     * by the cluster before initialize is called.
+     * 
+     * @param cluster 
+     */
+    void initialize(Cluster cluster);
+    
+    void addRemote(FeedService service);
     
     /** Get all messages sharing the given message Id.
      * 
@@ -167,4 +178,6 @@ public interface FeedService {
      * @return A Cluster object.
      */
     Cluster getCluster();
+    
+    public Feed getFeed(FeedPath path) throws InvalidPath;
 }

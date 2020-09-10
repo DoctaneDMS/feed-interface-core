@@ -181,7 +181,7 @@ public class MessageFactory {
             FeedPath name = nameSupplier.isPresent() ? nameSupplier.get().get() : Message.getName(allHeaders.get()).orElse(FeedPath.ROOT);
             String sender = Message.getSender(allHeaders.get()).orElse(null);
             Instant timestamp = Message.getTimestamp(allHeaders.get()).orElse(null);
-            UUID serverId = Message.getServerId(allHeaders.get()).orElse(null);
+            Optional<UUID> serverId = Message.getServerId(allHeaders.get());
             MessageType type = Message.getType(allHeaders.get());
 
             return Optional.of(

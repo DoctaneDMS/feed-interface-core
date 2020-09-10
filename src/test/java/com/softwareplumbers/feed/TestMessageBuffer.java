@@ -28,6 +28,7 @@ import static org.junit.Assert.fail;
 import static com.softwareplumbers.feed.test.TestUtils.*;
 import java.io.PrintWriter;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -46,7 +47,7 @@ public class TestMessageBuffer {
         JsonObject testHeaders = Json.createObjectBuilder().add("field1", "one").build();
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
-        UUID serverId = UUID.randomUUID();
+        Optional<UUID> serverId = Optional.of(UUID.randomUUID());
         FeedPath id = FeedPath.ROOT.addId("123");
         Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
@@ -62,7 +63,7 @@ public class TestMessageBuffer {
         JsonObject testHeaders = Json.createObjectBuilder().add("field1", "one").build();
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
-        UUID serverId = UUID.randomUUID();
+        Optional<UUID> serverId = Optional.of(UUID.randomUUID());
         FeedPath id = FeedPath.ROOT.addId("123");
         Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
@@ -79,7 +80,7 @@ public class TestMessageBuffer {
         JsonObject testHeaders = Json.createObjectBuilder().add("field1", "one").build();
         InputStream testData = new ByteArrayInputStream("abc123".getBytes());
         Instant time = Instant.now();
-        UUID serverId = UUID.randomUUID();
+        Optional<UUID> serverId = Optional.of(UUID.randomUUID());
         FeedPath id = FeedPath.ROOT.addId("123");
         Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, testHeaders, testData, -1, false);
         assertEquals("123", message.getId());
@@ -95,7 +96,7 @@ public class TestMessageBuffer {
     public void testMessageRoundtrip() throws IOException {
         BufferPool pool = new BufferPool(100000);
         MessageBuffer testBuffer = pool.createBuffer(new MessageClock(), 1024);
-        Message message = generateMessage(randomFeedPath());
+        Message message = generateMessage(randomFeedPath()).setServerId(UUID.randomUUID());
         testBuffer.addMessage(message);
         MessageIterator results = testBuffer.getMessagesAfter(message.getTimestamp().minusMillis(100));
         Message after = results.toStream().findAny().orElseThrow(()->new RuntimeException("no message"));
@@ -111,7 +112,7 @@ public class TestMessageBuffer {
         MessageBuffer testBuffer = pool.createBuffer(new MessageClock(), 1024);
         Instant first = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> messages = generateMessages(count, 2, randomFeedPath(), message->testBuffer.addMessage(message));
+        Map<FeedPath,Message> messages = generateMessages(count, 2, randomFeedPath(), message->testBuffer.addMessage(message.setServerId(UUID.randomUUID())));
         testBuffer.dumpState(new PrintWriter(System.out));
         System.out.println("****Getting messages from " + first + " ****");
         List<Message> result = testBuffer.getMessagesAfter(first).toStream().collect(Collectors.toList());
@@ -140,7 +141,7 @@ public class TestMessageBuffer {
         MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant first = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> generated = generateMessages(40, 2, randomFeedPath(), message->buffer.addMessage(message));
+        Map<FeedPath,Message> generated = generateMessages(40, 2, randomFeedPath(), message->buffer.addMessage(message.setServerId(UUID.randomUUID())));
         // pool size should be greater than maximum
         assertThat(pool.getSize(), greaterThan(messageSize * 20L));
         buffer.dumpState(new PrintWriter(System.out));
@@ -160,7 +161,7 @@ public class TestMessageBuffer {
         MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant start = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message)); 
+        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message.setServerId(UUID.randomUUID()))); 
         int receivedCount = 0;
         while (receivedCount < 100) {
             Thread.sleep(5);
@@ -182,7 +183,7 @@ public class TestMessageBuffer {
         MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant start = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, Collections.singletonList(randomFeedPath()), message->buffer.addMessage(message));         
+        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, Collections.singletonList(randomFeedPath()), message->buffer.addMessage(message.setServerId(UUID.randomUUID())));         
         Map<FeedPath,Message> results = new TreeMap<>();
         createReceiver(1, buffer, 100, start, results);
         assertMapsEqual(generated, results);
@@ -194,7 +195,7 @@ public class TestMessageBuffer {
         MessageBuffer buffer = pool.createBuffer(new MessageClock(), 1024);
         Instant start = Instant.now();
         Thread.sleep(100);
-        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message)); 
+        Map<FeedPath,Message> generated = generateMessages(5, 20, 5, getFeeds(), message->buffer.addMessage(message.setServerId(UUID.randomUUID()))); 
         CountDownLatch receiving = new CountDownLatch(3);
         List<Map<FeedPath,Message>> results = createReceivers(receiving, buffer, start, 100);
         if (receiving.await(20, TimeUnit.SECONDS)) {

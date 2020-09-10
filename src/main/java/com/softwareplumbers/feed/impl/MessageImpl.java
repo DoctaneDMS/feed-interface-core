@@ -19,6 +19,7 @@ import java.io.SequenceInputStream;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.UUID;
 import javax.json.Json;
 import javax.json.JsonException;
@@ -39,13 +40,13 @@ public class MessageImpl implements Message {
     private FeedPath name;
     private String id;
     private Instant timestamp;
-    private UUID serverId;
+    private Optional<UUID> serverId;
     private InputStreamSupplier supplier;
     private String sender;
     private long length;
     private MessageType type;
     
-    public MessageImpl(MessageType type, String id, FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers, long length, InputStreamSupplier supplier) {
+    public MessageImpl(MessageType type, String id, FeedPath name, String sender, Instant timestamp, Optional<UUID> serverId, JsonObject headers, long length, InputStreamSupplier supplier) {
         this.name = name;
         this.id = id;
         this.timestamp = timestamp;
@@ -65,7 +66,7 @@ public class MessageImpl implements Message {
         }
     }
     
-    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers, InputStream data, long length, boolean temporary) {
+    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, Optional<UUID> serverId, JsonObject headers, InputStream data, long length, boolean temporary) {
         this(
             type,
             name == null || name.isEmpty() ? null : name.part.getId().orElse(null),
@@ -79,7 +80,7 @@ public class MessageImpl implements Message {
         );
     }
     
-    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, UUID serverId, JsonObject headers) {
+    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, Optional<UUID> serverId, JsonObject headers) {
         this.name = name;
         this.id = name == null || name.isEmpty() ? null : name.part.getId().orElse(null);
         this.timestamp = timestamp;
@@ -102,7 +103,7 @@ public class MessageImpl implements Message {
         if (timestamp != null) builder = builder.add("timestamp", timestamp.toString());
         if (sender != null) builder = builder.add("sender", sender);
         if (type != MessageType.NONE) builder.add("type", type.toString());
-        if (serverId != null) builder.add("serverId", serverId.toString());
+        if (serverId.isPresent()) builder.add("serverId", serverId.get().toString());
 
         return builder
             .add("headers", headers)
@@ -162,13 +163,13 @@ public class MessageImpl implements Message {
     }
     
     @Override
-    public UUID getServerId() {
+    public Optional<UUID> getServerId() {
         return serverId;
     }
     
     @Override
     public Message setServerId(UUID serverId) {
-        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers, length, supplier);        
+        return new MessageImpl(type, id, name, sender, timestamp, Optional.of(serverId), headers, length, supplier);        
     }
     
     @Override
@@ -257,6 +258,6 @@ public class MessageImpl implements Message {
     }
     
     public static Message acknowledgement(Message message, Instant atTime, UUID atServer) {
-        return new MessageImpl(MessageType.ACK, message.getName(), null, atTime, atServer, JsonObject.EMPTY_JSON_OBJECT);
+        return new MessageImpl(MessageType.ACK, message.getName(), null, atTime, Optional.of(atServer), JsonObject.EMPTY_JSON_OBJECT);
     }
 }

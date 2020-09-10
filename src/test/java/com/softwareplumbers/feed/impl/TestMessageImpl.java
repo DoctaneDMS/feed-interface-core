@@ -7,6 +7,7 @@ package com.softwareplumbers.feed.impl;
 
 import com.softwareplumbers.feed.MessageType;
 import java.io.ByteArrayInputStream;
+import java.util.Optional;
 import javax.json.Json;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
@@ -31,19 +32,19 @@ public class TestMessageImpl {
     @Test
     public void testCanCreateMinimalMessage() {
         
-        MessageImpl impl = new MessageImpl(MessageType.NONE, null, null, null, null, JsonValue.EMPTY_JSON_OBJECT, new ByteArrayInputStream(NO_BYTES), -1, false);
+        MessageImpl impl = new MessageImpl(MessageType.NONE, null, null, null, Optional.empty(), JsonValue.EMPTY_JSON_OBJECT, new ByteArrayInputStream(NO_BYTES), -1, false);
         assertThat(impl.getName(), nullValue());
         assertThat(impl.getId(), nullValue());
         assertThat(impl.getFeedName(), nullValue());
         assertThat(impl.getHeaders(), equalTo(JsonValue.EMPTY_JSON_OBJECT));
         assertThat(impl.getSender(), nullValue());
-        assertThat(impl.getServerId(), nullValue());
+        assertThat(impl.getServerId(), equalTo(Optional.empty()));
 
     }
     
     @Test
     public void testCanWriteMinimalMessage() {
-        MessageImpl impl = new MessageImpl(MessageType.NONE, null, null, null, null, JsonValue.EMPTY_JSON_OBJECT, new ByteArrayInputStream(NO_BYTES), -1, false);
+        MessageImpl impl = new MessageImpl(MessageType.NONE, null, null, null, Optional.empty(), JsonValue.EMPTY_JSON_OBJECT, new ByteArrayInputStream(NO_BYTES), -1, false);
         JsonObject headerStream = Json.createReader(impl.getHeaderStream()).readObject();
         assertThat(headerStream, equalTo(MIN_HEADERS));        
     }

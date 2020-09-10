@@ -11,12 +11,16 @@ import java.util.ArrayList;
 import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+import org.slf4j.ext.XLogger;
+import org.slf4j.ext.XLoggerFactory;
 
 /**
  *
  * @author jonat
  */
 public class DummyCluster implements Cluster {
+    
+    private static final XLogger LOG = XLoggerFactory.getXLogger(DummyCluster.class);
     
     private final ArrayList<FeedService> services = new ArrayList<>();
     
@@ -29,10 +33,13 @@ public class DummyCluster implements Cluster {
         return services.stream().filter(filter);
     }
     
-    public void init(FeedService service) {
+    public void register(FeedService service) {
+        LOG.entry(service);
         synchronized(this) {
+            service.initialize(this);
+            services.forEach(existing->existing.addRemote(service));
             services.add(service);
-            services.stream().filter(remote->!Objects.equals(remote.getServerId(), service.getServerId())).forEach(remote->service.registerRemote(remote));
         }
+        LOG.exit();
     }
 }

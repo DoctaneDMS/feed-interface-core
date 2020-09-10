@@ -85,11 +85,14 @@ public class AbstractFeed implements Feed {
     }
     
     public AbstractFeed getFeed(FeedService service, FeedPath path) throws InvalidPath {
+        LOG.entry(getName(), service, path);
         if (path.isEmpty()) return this;
         AbstractFeed parent = getFeed(service, path.parent);
-        return path.part.getName()
-            .map(name->parent.children.computeIfAbsent(name, key -> new AbstractFeed(cast(service).createBuffer(), parent, key)))
-            .orElseThrow(()->LOG.throwing(new InvalidPath(path)));
+        return LOG.exit(
+            path.part.getName()
+                .map(name->parent.children.computeIfAbsent(name, key -> new AbstractFeed(cast(service).createBuffer(), parent, key)))
+                .orElseThrow(()->LOG.throwing(new InvalidPath(path)))
+        );
     }
               
     private void trigger(AbstractFeedService service, Message message) {
@@ -105,7 +108,7 @@ public class AbstractFeed implements Feed {
                     if (!callback.future.isCancelled()) {
                         if (callback.predicate.test(message)) {
                             service.callback(() -> { 
-                                MessageIterator messages = search(service, entryTimestamp, service.getServerId(), callback.predicate);
+                                MessageIterator messages = search(service, entryTimestamp, service.getServerId(), false, callback.predicate);
                                 if (messages.hasNext()) {
                                     LOG.trace("Completing callback with messages");
                                     callback.future.complete(messages);
@@ -137,8 +140,8 @@ public class AbstractFeed implements Feed {
 
     @Override
     public CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
-        LOG.entry(service, from, serverId);
-        MessageIterator results = search(service, from, serverId, filters);
+        LOG.entry(getName(), service, from, serverId);
+        MessageIterator results = search(service, from, serverId, false, filters); // TODO: remove the false here.
         if (results.hasNext()) {
             LOG.debug("Found results, returning immediately");
             return LOG.exit(CompletableFuture.completedFuture(results));
@@ -152,19 +155,22 @@ public class AbstractFeed implements Feed {
     }
     
     public Message post(FeedService service, Message message) {
+        LOG.entry(getName(), service, message);
         AbstractFeedService svc = cast(service);
         message = message.setName(getName().addId(svc.generateMessageId()));
+        if (!message.getServerId().isPresent()) message = message.setServerId(service.getServerId());
         Message result = buffer.addMessage(message);
         trigger(svc, result);
-        return result;
+        return LOG.exit(result);
     }
         
     @Override
     public MessageIterator search(FeedService service, Instant from, UUID serverId, boolean relay, Predicate<Message>... filters) {
+        LOG.entry(getName(), service, from, serverId, relay, filters);
         if (children.isEmpty()) {
-            return search(service, from, false, Instant.MAX, true, serverId, relay, filters);
+            return LOG.exit(search(service, from, false, Instant.MAX, true, serverId, relay, filters));
         } else {
-            return search(service, from, false, checkpoint(), true, serverId, relay, filters);
+            return LOG.exit(search(service, from, false, checkpoint(), true, serverId, relay, filters));
         }
     }
     
@@ -179,7 +185,8 @@ public class AbstractFeed implements Feed {
     
     @Override
     public MessageIterator search(FeedService service, String id, Predicate<Message>... filter) {
-        return buffer.getMessages(id, filter);
+        LOG.entry(getName(), service, id, filter);
+        return LOG.exit(buffer.getMessages(id, filter));
     }
     
     private Predicate<Message> filterByServerPerspective(AbstractFeedService service, Instant from, Instant to, UUID serverId) {
@@ -212,7 +219,7 @@ public class AbstractFeed implements Feed {
     
     @Override
     public MessageIterator search(FeedService svc, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, boolean relay, Predicate<Message>... filters) {
-        LOG.entry(from, serverId);
+        LOG.entry(getName(), svc, from, fromInclusive, to, toInclusive, serverId, relay, filters);
         MessageIterator result;
         boolean bufferedDataComplete;
         AbstractFeedService service = cast(svc);
@@ -239,7 +246,7 @@ public class AbstractFeed implements Feed {
                 }
             } catch (InvalidPath exp) {
                 // Invalid path shouldn't happen here
-                throw FeedExceptions.runtime(exp);
+                throw LOG.throwing(FeedExceptions.runtime(exp));
             }
         }
         
@@ -247,7 +254,7 @@ public class AbstractFeed implements Feed {
             Stream<MessageIterator> feeds = Stream.concat(
                 Stream.of(result), 
                 children.values().stream().map(feed->feed.search(service, from, fromInclusive, to, toInclusive, serverId, relay, filters)));
-            MessageIterator.merge(feeds);            
+            result = MessageIterator.merge(feeds);            
         }
 
         return LOG.exit(result);
@@ -269,6 +276,7 @@ public class AbstractFeed implements Feed {
     }
     
     public MessageIterator relay(AbstractFeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
+        LOG.entry(getName(), service, from, fromInclusive, to, toInclusive, serverId, filters);
         MessageIterator result = MessageIterator.EMPTY;
         try (Stream<FeedService> remotes = service.getCluster().getServices(remote -> !Objects.equals(service.getServerId(), remote.getServerId()))) {
             for (FeedService remote : (Iterable<FeedService>)remotes::iterator) {
@@ -281,7 +289,7 @@ public class AbstractFeed implements Feed {
                 }
             }
         }
-        return result;
+        return LOG.exit(result);
     }  
     
 

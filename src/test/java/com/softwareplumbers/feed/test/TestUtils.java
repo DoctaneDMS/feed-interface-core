@@ -29,6 +29,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -36,6 +37,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.json.Json;
@@ -104,7 +107,7 @@ public class TestUtils {
         InputStream testData = new ByteArrayInputStream(randomText(10).getBytes());
         Instant time = Instant.now(CLOCK);
         FeedPath id = feed.addId(UUID.randomUUID().toString());
-        return new MessageImpl(MessageType.NONE, id, "testuser", time, UUID.randomUUID(), testHeaders, testData, -1, false);
+        return new MessageImpl(MessageType.NONE, id, "testuser", time, Optional.empty(), testHeaders, testData, -1, false);
     }
     
     public static int getAverageMessageSize() throws IOException {
@@ -167,10 +170,10 @@ public class TestUtils {
         return Collections.unmodifiableList(Arrays.asList(FEEDS));
     }
     
-    public static void createReceiver(int id, FeedService service, int count, FeedPath path, Instant from, Map<FeedPath,Message> results) {
+    public static void createReceiver(int id, FeedService service, int count, FeedPath path, Instant from, Map<FeedPath,Message> results) throws TimeoutException {
         try {
             while (count > 0) {
-                MessageIterator messages = service.listen(path, from, service.getServerId()).get();
+                MessageIterator messages = service.listen(path, from, service.getServerId()).get(5, TimeUnit.SECONDS);
                 Message current = null;
                 while (messages.hasNext()) {
                     current = messages.next();
@@ -259,7 +262,11 @@ public class TestUtils {
                 final int id =  i;
                 final int k = j; // FUCK JAVA LAMBDAS
                 new Thread(()-> {
-                    TestUtils.createReceiver(id, service, count, feeds.get(k), from, resultMap);
+                    try {
+                        TestUtils.createReceiver(id, service, count, feeds.get(k), from, resultMap);
+                    } catch (TimeoutException e) {
+                        LOG.error("Listener timed out");
+                    }
                     receivers.countDown();
                 }).start();
             }

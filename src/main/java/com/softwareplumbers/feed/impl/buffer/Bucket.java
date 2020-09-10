@@ -15,6 +15,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.SequenceInputStream;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -171,7 +172,7 @@ class Bucket {
     }
     
     Stream<Message> getMessages(String id) {
-        return idIndex.get(id).stream();
+        return idIndex.getOrDefault(id, Collections.EMPTY_LIST).stream();
     }
         
 }

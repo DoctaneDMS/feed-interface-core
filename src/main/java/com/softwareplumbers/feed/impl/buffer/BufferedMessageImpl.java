@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import javax.json.Json;
 import javax.json.JsonException;
@@ -43,7 +44,7 @@ public class BufferedMessageImpl implements Message {
             this.headers = allHeaders.getJsonObject("headers");
             this.name = FeedPath.valueOf(allHeaders.getString("name"));
             this.timestamp = Message.getTimestamp(allHeaders).orElse(null);
-            this.serverId = Message.getServerId(allHeaders).orElse(null);
+            this.serverId = Message.getServerId(allHeaders).orElseThrow(()->new RuntimeException("serverId is mandatory"));
             this.sender = Message.getSender(allHeaders).orElse(null);
             this.type = Message.getType(allHeaders);
         }
@@ -149,13 +150,13 @@ public class BufferedMessageImpl implements Message {
     }
     
     @Override
-    public UUID getServerId() {
-        return getAllHeaders().serverId;
+    public Optional<UUID> getServerId() {
+        return Optional.of(getAllHeaders().serverId);
     }
 
     @Override
     public Message setServerId(UUID serverId) {
-        return new MessageImpl(getType(), getId(), getName(), getSender(), getTimestamp(), serverId, getHeaders(), getLength(), data);
+        return new MessageImpl(getType(), getId(), getName(), getSender(), getTimestamp(), Optional.of(serverId), getHeaders(), getLength(), data);
     }
 
     @Override

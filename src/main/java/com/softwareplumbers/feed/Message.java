@@ -117,7 +117,7 @@ public interface Message {
     public long getLength();
     public Instant getTimestamp();
     public Message setTimestamp(Instant timestamp);  
-    public UUID getServerId();
+    public Optional<UUID> getServerId();
     public Message setServerId(UUID serverId);
     public MessageType getType();
     public Message setType(MessageType type);

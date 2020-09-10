@@ -6,6 +6,7 @@
 package com.softwareplumbers.feed.impl;
 
 import com.softwareplumbers.feed.Cluster;
+import com.softwareplumbers.feed.Feed;
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import com.softwareplumbers.feed.FeedPath;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.slf4j.ext.XLogger;
@@ -51,10 +53,21 @@ public abstract class AbstractFeedService implements FeedService {
     private final MessageClock clock = new MessageClock();
     private final long ackTimeout = 600; // 10 minutes
     private final Map<UUID, Remote> remotes = new ConcurrentHashMap<>();
-    private final Cluster cluster;
+    private Cluster cluster;
 
-    private final Predicate<Message> THIS_SERVER = message->Objects.equals(message.getServerId(),getServerId());
+    private final Predicate<Message> THIS_SERVER;
 
+    private static <T> Predicate<T> trace(Function<T,String> message, Predicate<T> predicate) {
+        return LOG.isTraceEnabled() 
+            ? t-> {
+                LOG.trace(message.apply(t));
+                boolean result = predicate.test(t);
+                LOG.trace("result: {}", result);
+                return result;
+            } 
+            : predicate;
+    }
+    
     /** Create a new Abstract Feed Service.
      * 
      * @param cluster Cluster to which this service belongs
@@ -62,17 +75,27 @@ public abstract class AbstractFeedService implements FeedService {
      * @param poolSize Amount of memory in bytes to dedicate to all message buffers
      * @param bucketSize Size of a bucket - should be larger than the expected maximum message size
      */
-    public AbstractFeedService(Cluster cluster, UUID serverId, ExecutorService callbackExecutor, long poolSize, int bucketSize) {
+    public AbstractFeedService(UUID serverId, ExecutorService callbackExecutor, long poolSize, int bucketSize) {
         this.bufferPool = new BufferPool((int)poolSize);
         this.bucketSize = bucketSize; 
         this.callbackExecutor = callbackExecutor;
         this.rootFeed = new AbstractFeed(createBuffer());
-        this.cluster = cluster;
         this.serverId = serverId;
-        cluster.init(this);
+        this.cluster = Cluster.local(this);
+        this.THIS_SERVER = trace(message->"server id " + message.getServerId() + " = " + serverId, message->message.getServerId().map(id->id.equals(serverId)).orElse(false));
+                
     }
     
-    public void registerRemote(FeedService remoteService) {
+    public void initialize(Cluster cluster) {
+        LOG.entry(cluster);
+        this.cluster = cluster;
+        cluster.getServices(service->!Objects.equals(service.getServerId(), serverId))
+            .forEach(this::addRemote);
+        LOG.exit();
+    }
+    
+    @Override
+    public void addRemote(FeedService remoteService) {
         LOG.entry(remoteService);
         remotes.computeIfAbsent(remoteService.getServerId(), uuid->new Remote(remoteService));
         LOG.exit();
@@ -109,7 +132,6 @@ public abstract class AbstractFeedService implements FeedService {
     @Override
     public CompletableFuture<MessageIterator> watch(UUID serverId, Instant from) {
         LOG.entry(serverId);
-        registerRemote(cluster.getService(serverId).orElseThrow(()->new RuntimeException("Invalid server Id" + serverId)));
         return LOG.exit(rootFeed.listen(this, from, getServerId(), THIS_SERVER));
     }
 
@@ -143,6 +165,11 @@ public abstract class AbstractFeedService implements FeedService {
         if (path.isEmpty()) throw new InvalidPath(path);
         String id = path.part.getId().orElseThrow(()->new InvalidId(path.parent, path.part.toString()));
         return LOG.exit(rootFeed.getFeed(this, path.parent).search(this, id, filters));
+    }
+    
+    @Override
+    public Feed getFeed(FeedPath path) throws InvalidPath {
+        return rootFeed.getFeed(this, path);
     }
     
     public void dumpState(FeedPath path, PrintWriter out) throws IOException {
@@ -185,15 +212,10 @@ public abstract class AbstractFeedService implements FeedService {
             LOG.exit();
         }
 
-        public void monitor(Instant from) {
-            LOG.entry();
-            remote.watch(getServerId(), from).whenComplete(this::monitorCallback);
-            LOG.exit();
-        }
-        
         public Remote(FeedService remote) {
             LOG.entry(remote);
             this.remote = remote;
+            remote.watch(getServerId(), clock.instant()).whenComplete(this::monitorCallback);
             LOG.exit();
         }    
         

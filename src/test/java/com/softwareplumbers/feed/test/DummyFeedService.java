@@ -23,8 +23,8 @@ import java.util.function.Predicate;
  */
 public class DummyFeedService extends AbstractFeedService {
     
-    public DummyFeedService(Cluster cluster, long poolSize, int bucketSize) {
-        super(cluster, UUID.randomUUID(), Executors.newFixedThreadPool(5), poolSize, bucketSize);
+    public DummyFeedService(long poolSize, int bucketSize) {
+        super(UUID.randomUUID(), Executors.newFixedThreadPool(5), poolSize, bucketSize);
     }
 
     @Override

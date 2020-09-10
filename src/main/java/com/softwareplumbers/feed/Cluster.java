@@ -23,5 +23,22 @@ public interface Cluster {
     
     Stream<FeedService> getServices(Predicate<FeedService>... filters);
     
-    void init(FeedService service);
+    void register(FeedService service);
+    
+    public static Cluster local(FeedService service) {
+        return new Cluster() {
+            @Override
+            public Optional<FeedService> getService(UUID id) {
+                return Objects.equals(service.getServerId(), id) ? Optional.of(service) : Optional.empty();
+            }
+            
+            @Override
+            public Stream<FeedService> getServices(Predicate<FeedService>... filters) {
+                return Stream.of(service).filter(Stream.of(filters).reduce(s->true, Predicate::and));
+            }
+
+            @Override
+            public void register(FeedService service) {}
+        };
+    }
 }
