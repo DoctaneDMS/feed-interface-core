@@ -203,7 +203,7 @@ public abstract class AbstractFeedService implements FeedService {
                         receivedCount++;
                         rootFeed.getFeed(local, message.getFeedName()).replicate(local, message);
                     }
-                    remote.watch(getServerId(), message.getTimestamp()).whenCompleteAsync(this::monitorCallback);
+                    remote.watch(getServerId(), message.getTimestamp()).whenCompleteAsync(this::monitorCallback, callbackExecutor);
                 } catch (Exception exp) {
                     LOG.error("Error monitoring {}", remote.getServerId());
                     lastException = Optional.of(exp);
