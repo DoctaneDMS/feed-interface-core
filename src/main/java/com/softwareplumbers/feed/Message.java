@@ -69,6 +69,23 @@ public interface Message {
             return new RemoteInfo(UUID.fromString(json.getString("serverId")), Instant.parse(json.getString("timestamp")));
             
         }
+        
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof RemoteInfo ? equals((RemoteInfo)other) : false;
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 7;
+            hash = 89 * hash + Objects.hashCode(this.serverId);
+            hash = 89 * hash + Objects.hashCode(this.timestamp);
+            return hash;
+        }
+        
+        public boolean equals(RemoteInfo other) {
+            return serverId.equals(other.serverId) && timestamp.equals(other.timestamp);
+        }
     }
     
     public static JsonObject getHeaders(JsonObject obj) {
@@ -240,6 +257,7 @@ public interface Message {
     public static boolean equals(Message a, Message b) {
         return Objects.equals(a.getName(), b.getName())
             && Objects.equals(a.getSender(), b.getSender())
+            && Objects.equals(a.getRemoteInfo(), b.getRemoteInfo())
             && Objects.equals(a.getHeaders(), b.getHeaders());
     }
     

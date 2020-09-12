@@ -16,9 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.SequenceInputStream;
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.UUID;
 import javax.json.Json;
@@ -197,14 +195,17 @@ public class MessageImpl implements Message {
         return new MessageImpl(type, id, name, sender, timestamp, serverId, remoteInfo, headers, length, supplier);        
     }
     
+    @Override
     public Optional<RemoteInfo> getRemoteInfo() {
         return remoteInfo;
     }
     
+    @Override
     public Message setRemoteInfo(RemoteInfo remoteInfo) {
         return new MessageImpl(type, id, name, sender, timestamp, serverId, Optional.of(remoteInfo), headers, length, supplier);                
     }
     
+    @Override
     public Message localizeTimestamp(UUID serverId, Instant timestamp) {
         return new MessageImpl(type, id, name, sender, timestamp, Optional.of(serverId), Optional.of(new RemoteInfo(this.serverId.orElse(null), this.timestamp)), headers, length, supplier);
     }
