@@ -55,7 +55,7 @@ public class TestMessageBuffer {
         Instant time = Instant.now();
         Optional<UUID> serverId = Optional.of(UUID.randomUUID());
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, testHeaders, testData, -1, true);
+        Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, Optional.empty(), testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
@@ -71,7 +71,7 @@ public class TestMessageBuffer {
         Instant time = Instant.now();
         Optional<UUID> serverId = Optional.of(UUID.randomUUID());
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, testHeaders, testData, -1, true);
+        Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, Optional.empty(), testHeaders, testData, -1, true);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());
@@ -88,7 +88,7 @@ public class TestMessageBuffer {
         Instant time = Instant.now();
         Optional<UUID> serverId = Optional.of(UUID.randomUUID());
         FeedPath id = FeedPath.ROOT.addId("123");
-        Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, testHeaders, testData, -1, false);
+        Message message = new MessageImpl(MessageType.NONE, id, "testuser", time, serverId, Optional.empty(), testHeaders, testData, -1, false);
         assertEquals("123", message.getId());
         assertEquals(FeedPath.ROOT.addId("123"), message.getName());
         assertEquals(time, message.getTimestamp());

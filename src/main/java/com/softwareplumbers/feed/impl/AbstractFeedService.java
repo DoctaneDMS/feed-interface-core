@@ -19,7 +19,6 @@ import com.softwareplumbers.feed.impl.buffer.MessageClock;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,7 +28,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
 
@@ -70,7 +68,7 @@ public abstract class AbstractFeedService implements FeedService {
     
     /** Create a new Abstract Feed Service.
      * 
-     * @param cluster Cluster to which this service belongs
+     * @param serverId An identifier for this service
      * @param callbackExecutor Executor service for running callbacks
      * @param poolSize Amount of memory in bytes to dedicate to all message buffers
      * @param bucketSize Size of a bucket - should be larger than the expected maximum message size
@@ -148,6 +146,15 @@ public abstract class AbstractFeedService implements FeedService {
         return LOG.exit(rootFeed.getFeed(this, path).search(this, from, fromInclusive, to, toInclusive, serverId, relay, filters));
     }
     
+    /** Post a message.
+     * 
+     * The given message is submitted to the message buffer.
+     * 
+     * @param path
+     * @param message
+     * @return
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
+     */
     @Override
     public Message post(FeedPath path, Message message) throws InvalidPath {
         LOG.entry(path, message);

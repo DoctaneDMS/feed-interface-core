@@ -38,6 +38,7 @@ public class BufferedMessageImpl implements Message {
         final String sender;
         final MessageType type;
         final long length;
+        final Optional<RemoteInfo> remoteInfo;
         
         public Headers(JsonObject allHeaders) {
             this.length = allHeaders.getJsonNumber("length").longValueExact();
@@ -47,6 +48,7 @@ public class BufferedMessageImpl implements Message {
             this.serverId = Message.getServerId(allHeaders).orElseThrow(()->new RuntimeException("serverId is mandatory"));
             this.sender = Message.getSender(allHeaders).orElse(null);
             this.type = Message.getType(allHeaders);
+            this.remoteInfo = Message.getRemoteInfo(allHeaders);
         }
     }
     
@@ -93,7 +95,7 @@ public class BufferedMessageImpl implements Message {
     }
     
     public Message setType(MessageType type) {
-        return new MessageImpl(type, getId(), getName(), getSender(), getTimestamp(), getServerId(), getHeaders(), getLength(), data);        
+        return new MessageImpl(type, getId(), getName(), getSender(), getTimestamp(), getServerId(), getRemoteInfo(), getHeaders(), getLength(), data);        
     }
     
     @Override
@@ -107,7 +109,7 @@ public class BufferedMessageImpl implements Message {
     
     @Override
     public MessageImpl setData(InputStreamSupplier data, long length) {
-        return new MessageImpl(getType(), getId(), getName(), getSender(), getTimestamp(), getServerId(), getHeaders(),length, data);
+        return new MessageImpl(getType(), getId(), getName(), getSender(), getTimestamp(), getServerId(), getRemoteInfo(), getHeaders(),length, data);
     }    
 
     @Override
@@ -126,7 +128,7 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public MessageImpl setName(FeedPath name) {
-        return new MessageImpl(getType(), name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, getSender(), getTimestamp(), getServerId(), getHeaders(), getLength(), data);
+        return new MessageImpl(getType(), name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, getSender(), getTimestamp(), getServerId(), getRemoteInfo(), getHeaders(), getLength(), data);
     }
 
     @Override
@@ -136,7 +138,7 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public Message setSender(String sender) {
-        return new MessageImpl(getType(), getId(), getName(), sender, getTimestamp(), getServerId(), getHeaders(), getLength(), data);
+        return new MessageImpl(getType(), getId(), getName(), sender, getTimestamp(), getServerId(), getRemoteInfo(), getHeaders(), getLength(), data);
     }
         
     @Override
@@ -146,7 +148,7 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public Message setTimestamp(Instant timestamp) {
-        return new MessageImpl(getType(), getId(), getName(), getSender(), timestamp, getServerId(), getHeaders(), getLength(), data);
+        return new MessageImpl(getType(), getId(), getName(), getSender(), timestamp, getServerId(), getRemoteInfo(), getHeaders(), getLength(), data);
     }
     
     @Override
@@ -156,7 +158,7 @@ public class BufferedMessageImpl implements Message {
 
     @Override
     public Message setServerId(UUID serverId) {
-        return new MessageImpl(getType(), getId(), getName(), getSender(), getTimestamp(), Optional.of(serverId), getHeaders(), getLength(), data);
+        return new MessageImpl(getType(), getId(), getName(), getSender(), getTimestamp(), Optional.of(serverId), getRemoteInfo(), getHeaders(), getLength(), data);
     }
 
     @Override
@@ -164,6 +166,20 @@ public class BufferedMessageImpl implements Message {
         return getName().part.getId().get();
     }
     
+    @Override
+    public Optional<RemoteInfo> getRemoteInfo() {
+        return getAllHeaders().remoteInfo;
+    }
+    
+    @Override
+    public Message setRemoteInfo(RemoteInfo remoteInfo) {
+        return new MessageImpl(getType(), getId(), getName(), getSender(), getTimestamp(), getServerId(), Optional.of(remoteInfo), getHeaders(), getLength(), data);        
+    }
+    
+    @Override
+    public Message localizeTimestamp(UUID serverId, Instant timestamp) {
+        return new MessageImpl(getType(), getId(), getName(), getSender(), timestamp, Optional.of(serverId), Optional.of(new RemoteInfo(getServerId().orElse(null), getTimestamp())), getHeaders(), getLength(), data);                
+    }
 
     
     @Override

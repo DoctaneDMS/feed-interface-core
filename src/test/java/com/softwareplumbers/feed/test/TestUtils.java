@@ -113,7 +113,7 @@ public class TestUtils {
         InputStream testData = new ByteArrayInputStream(randomText(10).getBytes());
         Instant time = Instant.now(CLOCK);
         FeedPath id = feed.addId(UUID.randomUUID().toString());
-        return new MessageImpl(MessageType.NONE, id, "testuser", time, Optional.empty(), testHeaders, testData, -1, false);
+        return new MessageImpl(MessageType.NONE, id, "testuser", time, Optional.empty(), Optional.empty(), testHeaders, testData, -1, false);
     }
     
     public static int getAverageMessageSize() throws IOException {

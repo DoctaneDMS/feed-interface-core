@@ -149,12 +149,14 @@ public interface FeedService {
     
     /** Sent a message to a feed.
      * 
-     * The service may ignore any timestamp, name, or id specified in the 
-     * message.
+     * The service will ignore any timestamp, serverId, or message id specified in the 
+     * message. The returned message is an ACK containing (at least) the generated 
+     * message id, timestamp, and serverId (which will be the same as that returned by
+     * this.getServerId).
      * 
      * @param path Path of feed to send message to.
      * @param message
-     * @return A message with updated timestamp, name, and id
+     * @return An ack message with updated timestamp, name, and id
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
     Message post(FeedPath path, Message message) throws InvalidPath;

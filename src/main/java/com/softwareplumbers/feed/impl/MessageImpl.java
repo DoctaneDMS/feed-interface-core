@@ -36,17 +36,18 @@ public class MessageImpl implements Message {
     public static final int MAX_HEADER_SIZE = 10000;
     private static final InputStream NULL_STREAM = new InputStream() { public int read() { return -1; } };
     
-    private JsonObject headers;
-    private FeedPath name;
-    private String id;
-    private Instant timestamp;
-    private Optional<UUID> serverId;
-    private InputStreamSupplier supplier;
-    private String sender;
+    private final JsonObject headers;
+    private final FeedPath name;
+    private final String id;
+    private final Instant timestamp;
+    private final Optional<UUID> serverId;
+    private final InputStreamSupplier supplier;
+    private final String sender;
     private long length;
-    private MessageType type;
+    private final MessageType type;
+    private final Optional<RemoteInfo> remoteInfo;
     
-    public MessageImpl(MessageType type, String id, FeedPath name, String sender, Instant timestamp, Optional<UUID> serverId, JsonObject headers, long length, InputStreamSupplier supplier) {
+    public MessageImpl(MessageType type, String id, FeedPath name, String sender, Instant timestamp, Optional<UUID> serverId, Optional<RemoteInfo> remoteInfo, JsonObject headers, long length, InputStreamSupplier supplier) {
         this.name = name;
         this.id = id;
         this.timestamp = timestamp;
@@ -56,6 +57,7 @@ public class MessageImpl implements Message {
         this.length = length;
         this.sender = sender;
         this.type = type;
+        this.remoteInfo = remoteInfo;
     }
     
     private static InputStreamSupplier supplierOf(InputStream data, boolean temporary) {
@@ -66,7 +68,7 @@ public class MessageImpl implements Message {
         }
     }
     
-    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, Optional<UUID> serverId, JsonObject headers, InputStream data, long length, boolean temporary) {
+    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, Optional<UUID> serverId, Optional<RemoteInfo> remoteInfo, JsonObject headers, InputStream data, long length, boolean temporary) {
         this(
             type,
             name == null || name.isEmpty() ? null : name.part.getId().orElse(null),
@@ -74,13 +76,14 @@ public class MessageImpl implements Message {
             sender,
             timestamp,
             serverId,
+            remoteInfo,
             headers,
             length,
             supplierOf(data, temporary)
         );
     }
     
-    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, Optional<UUID> serverId, JsonObject headers) {
+    public MessageImpl(MessageType type, FeedPath name, String sender, Instant timestamp, Optional<UUID> serverId, Optional<RemoteInfo> remoteInfo, JsonObject headers) {
         this.name = name;
         this.id = name == null || name.isEmpty() ? null : name.part.getId().orElse(null);
         this.timestamp = timestamp;
@@ -90,6 +93,7 @@ public class MessageImpl implements Message {
         this.length = 0;
         this.sender = sender;
         this.type = type;        
+        this.remoteInfo = remoteInfo;
     }
     
     @Override
@@ -104,6 +108,7 @@ public class MessageImpl implements Message {
         if (sender != null) builder = builder.add("sender", sender);
         if (type != MessageType.NONE) builder.add("type", type.toString());
         if (serverId.isPresent()) builder.add("serverId", serverId.get().toString());
+        if (remoteInfo.isPresent()) builder.add("remoteInfo", remoteInfo.get().toJson());
 
         return builder
             .add("headers", headers)
@@ -121,7 +126,7 @@ public class MessageImpl implements Message {
     } 
     
     public MessageImpl setData(InputStreamSupplier data, long length) {
-        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers,length, data);
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, remoteInfo, headers,length, data);
     }
     
     @Override
@@ -149,7 +154,7 @@ public class MessageImpl implements Message {
     
     @Override
     public MessageImpl setName(FeedPath name) {
-        return new MessageImpl(type, name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, sender, timestamp, serverId, headers, length, supplier);
+        return new MessageImpl(type, name.part.getId().orElseThrow(()->new RuntimeException("Bad name")), name, sender, timestamp, serverId, remoteInfo, headers, length, supplier);
     }
 
     @Override
@@ -159,7 +164,7 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setTimestamp(Instant timestamp) {
-        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers, length, supplier);
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, remoteInfo, headers, length, supplier);
     }
     
     @Override
@@ -169,7 +174,7 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setServerId(UUID serverId) {
-        return new MessageImpl(type, id, name, sender, timestamp, Optional.of(serverId), headers, length, supplier);        
+        return new MessageImpl(type, id, name, sender, timestamp, Optional.of(serverId), remoteInfo, headers, length, supplier);        
     }
     
     @Override
@@ -179,7 +184,7 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setSender(String sender) {
-        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers, length, supplier);
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, remoteInfo, headers, length, supplier);
     }
     
     @Override
@@ -189,7 +194,19 @@ public class MessageImpl implements Message {
     
     @Override
     public Message setType(MessageType type) {
-        return new MessageImpl(type, id, name, sender, timestamp, serverId, headers, length, supplier);        
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, remoteInfo, headers, length, supplier);        
+    }
+    
+    public Optional<RemoteInfo> getRemoteInfo() {
+        return remoteInfo;
+    }
+    
+    public Message setRemoteInfo(RemoteInfo remoteInfo) {
+        return new MessageImpl(type, id, name, sender, timestamp, serverId, Optional.of(remoteInfo), headers, length, supplier);                
+    }
+    
+    public Message localizeTimestamp(UUID serverId, Instant timestamp) {
+        return new MessageImpl(type, id, name, sender, timestamp, Optional.of(serverId), Optional.of(new RemoteInfo(this.serverId.orElse(null), this.timestamp)), headers, length, supplier);
     }
     
     @Override
@@ -258,6 +275,6 @@ public class MessageImpl implements Message {
     }
     
     public static Message acknowledgement(Message message, Instant atTime, UUID atServer) {
-        return new MessageImpl(MessageType.ACK, message.getName(), null, atTime, Optional.of(atServer), JsonObject.EMPTY_JSON_OBJECT);
+        return new MessageImpl(MessageType.ACK, message.getName(), null, atTime, Optional.of(atServer), Optional.empty(), JsonObject.EMPTY_JSON_OBJECT);
     }
 }

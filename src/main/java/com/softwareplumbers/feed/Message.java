@@ -15,7 +15,9 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import javax.json.Json;
 import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
 import javax.json.JsonValue;
 
 /** Simple interface for messages.
@@ -45,6 +47,28 @@ public interface Message {
          * @throws FeedExceptions.StreamingException if error in nonrecoverable
          */
         public T recover(IOException e, InputStream is) throws FeedExceptions.StreamingException;
+    }
+    
+    public static class RemoteInfo {
+        
+        public final UUID serverId;
+        public final Instant timestamp;
+        
+        public RemoteInfo(UUID serverId, Instant timestamp) {
+            this.serverId = serverId; this.timestamp = timestamp;
+        }
+        
+        public JsonObject toJson() {
+            JsonObjectBuilder builder = Json.createObjectBuilder();
+            builder.add("serverId", serverId.toString());
+            builder.add("timestamp", timestamp.toString());
+            return builder.build();
+        }
+        
+        public static RemoteInfo fromJson(JsonObject json) {
+            return new RemoteInfo(UUID.fromString(json.getString("serverId")), Instant.parse(json.getString("timestamp")));
+            
+        }
     }
     
     public static JsonObject getHeaders(JsonObject obj) {
@@ -87,6 +111,14 @@ public interface Message {
         return MessageType.valueOf(obj.getString("type", null));
     }
     
+    public static Optional<RemoteInfo> getRemoteInfo(JsonObject obj) {
+        if (obj.containsKey("remoteInfo")) {
+            return Optional.of(RemoteInfo.fromJson(obj.getJsonObject("remoteInfo")));
+        } else {
+            return Optional.empty();
+        }
+    }
+    
     /** Get the headers of a message.
      * 
      * @return 
@@ -123,6 +155,22 @@ public interface Message {
     public Message setType(MessageType type);
     public String getSender();
     public Message setSender(String sender);
+    public Optional<RemoteInfo> getRemoteInfo();
+    public Message setRemoteInfo(RemoteInfo remoteInfo);
+
+    /** Utility method to localize the message timestamp.
+     * 
+     * Default implementation sets the message's remoteInfo with the current serverId and timestamp,
+     * then replaces serverId and timestamp with the specified values.
+     * 
+     * @param serverId new server Id
+     * @param timestamp new timestamp
+     * @return Updated message
+     */
+    public default Message localizeTimestamp(UUID serverId, Instant timestamp) {
+        RemoteInfo remoteInfo = new RemoteInfo(getServerId().orElseThrow(()->new RuntimeException("Remote message must have server Id")), getTimestamp());
+        return setTimestamp(timestamp).setServerId(serverId).setRemoteInfo(remoteInfo);
+    }
     
     /** Get the id of the message.
      * 

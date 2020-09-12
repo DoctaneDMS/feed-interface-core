@@ -8,6 +8,7 @@ package com.softwareplumbers.feed.impl;
 import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
+import com.softwareplumbers.feed.Message.RemoteInfo;
 import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.MessageType;
 import java.io.BufferedInputStream;
@@ -19,7 +20,6 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.json.Json;
 import javax.json.JsonException;
@@ -183,6 +183,7 @@ public class MessageFactory {
             Instant timestamp = Message.getTimestamp(allHeaders.get()).orElse(null);
             Optional<UUID> serverId = Message.getServerId(allHeaders.get());
             MessageType type = Message.getType(allHeaders.get());
+            Optional<RemoteInfo> remoteInfo = Message.getRemoteInfo(allHeaders.get());
 
             return Optional.of(
                 new MessageImpl(
@@ -191,6 +192,7 @@ public class MessageFactory {
                     sender,
                     timestamp, 
                     serverId,
+                    remoteInfo,
                     Message.getHeaders(allHeaders.get()), 
                     data, 
                     length, 
