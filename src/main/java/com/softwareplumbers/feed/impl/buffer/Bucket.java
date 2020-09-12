@@ -39,7 +39,7 @@ class Bucket {
     private byte[] buffer;
     private int position;
     
-    private final NavigableMap<Instant, Message> timeIndex;
+    private final NavigableMap<Instant, List<Message>> timeIndex;
     private final Map<String, List<Message>> idIndex;
     
     private class BufferOverflow extends IOException {
@@ -121,7 +121,7 @@ class Bucket {
         }
         
         Message buffered = new BufferedMessageImpl(chunk(endData, position), chunk(start, endData));
-        timeIndex.put(message.getTimestamp(), buffered);
+        timeIndex.computeIfAbsent(message.getTimestamp(), key->new LinkedList<>()).add(buffered);
         idIndex.computeIfAbsent(message.getId(), key->new LinkedList()).add(message);
         return buffered;
     }
@@ -152,11 +152,11 @@ class Bucket {
     }
     
     Stream<Message> getMessages() {
-        return timeIndex.values().stream();
+        return timeIndex.values().stream().flatMap(entries->entries.stream());
     }
     
     Stream<Message> getMessagesAfter(Instant timestamp) {
-        return timeIndex.tailMap(timestamp, false).values().stream();
+        return timeIndex.tailMap(timestamp, false).values().stream().flatMap(entries->entries.stream());
     }
 
     /** Get messages between from and to.
@@ -168,7 +168,7 @@ class Bucket {
      * @return Stream of messages.
      */
     Stream<Message> getMessagesBetween(Instant from, boolean fromInclusive, Instant to, boolean toInclusive) {
-        return timeIndex.subMap(from, fromInclusive, to, toInclusive).values().stream();
+        return timeIndex.subMap(from, fromInclusive, to, toInclusive).values().stream().flatMap(entries->entries.stream());
     }
     
     Stream<Message> getMessages(String id) {
