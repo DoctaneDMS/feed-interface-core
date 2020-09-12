@@ -61,7 +61,7 @@ public class TestCluster {
         Thread.sleep(10);
         Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
         Feed feedA = nodeA.getFeed(path);
-        generateMessages(1000, 2, path, message->feedA.post(nodeA, message)).forEach(message->sentMessages.add(message));
+        generateMessages(1000, 2, path, message->{ Message ack = feedA.post(nodeA, message); return message.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get()); }).forEach(message->sentMessages.add(message));
         assertThat(sentMessages.size(), equalTo(1000));
         Stream<Message> responseMessages = TestUtils.createReceiver(0, nodeB, 1000, path, start);
         assertThat(responseMessages.count(), equalTo(1000L));        

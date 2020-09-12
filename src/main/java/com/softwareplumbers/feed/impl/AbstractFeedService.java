@@ -53,7 +53,7 @@ public abstract class AbstractFeedService implements FeedService {
     private final Map<UUID, Remote> remotes = new ConcurrentHashMap<>();
     private Cluster cluster;
 
-    private final Predicate<Message> THIS_SERVER;
+    private static final boolean wasPostedLocally(Message message) { LOG.entry(message); return LOG.exit(!message.getRemoteInfo().isPresent()); }
 
     private static <T> Predicate<T> trace(Function<T,String> message, Predicate<T> predicate) {
         return LOG.isTraceEnabled() 
@@ -80,7 +80,6 @@ public abstract class AbstractFeedService implements FeedService {
         this.rootFeed = new AbstractFeed(createBuffer());
         this.serverId = serverId;
         this.cluster = Cluster.local(this);
-        this.THIS_SERVER = trace(message->"server id " + message.getServerId() + " = " + serverId, message->message.getServerId().map(id->id.equals(serverId)).orElse(false));
                 
     }
     
@@ -130,7 +129,7 @@ public abstract class AbstractFeedService implements FeedService {
     @Override
     public CompletableFuture<MessageIterator> watch(UUID serverId, Instant from) {
         LOG.entry(serverId);
-        return LOG.exit(rootFeed.listen(this, from, getServerId(), THIS_SERVER));
+        return LOG.exit(rootFeed.listen(this, from, getServerId(), AbstractFeedService::wasPostedLocally));
     }
 
     @Override

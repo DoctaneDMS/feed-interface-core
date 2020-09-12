@@ -49,7 +49,9 @@ public class TestFeedService {
     
     public Message post(Message message) {
         try {
-            return service.post(message.getFeedName(), message);
+            Message ack = service.post(message.getFeedName(), message);
+            // This should be the same as the message ultimately received *on the same server as it was posted*
+            return message.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get());
         } catch (InvalidPath e) {
             throw new RuntimeException(e);
         }
@@ -67,10 +69,11 @@ public class TestFeedService {
         assertThat(sentMessages.size(), equalTo(1000));
         TreeMap<FeedPath, Message> responseMessages = new TreeMap<>();
         int count = 0;
-        try (MessageIterator messages = service.search(path, start, service.getServerId())) {
+        try (MessageIterator messages = service.search(path, start, service.getServerId(), Filters.NO_ACKS)) {
             while (messages.hasNext()) {
                 Message received = messages.next();
                 responseMessages.put(received.getName(), received);
+                //received = received.setName(received.getName()); 
                 assertThat(received, isIn(sentMessages));
                 count++;
             }

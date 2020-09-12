@@ -173,9 +173,10 @@ public class AbstractFeed implements Feed {
         message = message
             .setName(getName().addId(svc.generateMessageId()))
             .setServerId(service.getServerId());
-        Message result = buffer.addMessage(message);
-        trigger(svc, result);
-        return LOG.exit(result);
+        
+        Message[] results = buffer.addMessages(message, MessageImpl.acknowledgement(message));
+        for (Message result: results) trigger(svc,result);
+        return LOG.exit(results[1]);
     }
     
     /** Handle a message replicated from another cluster node.
@@ -193,9 +194,10 @@ public class AbstractFeed implements Feed {
      */
     public Message replicate(AbstractFeedService service, Message message) {
         LOG.entry(getName(), service, message);
-        Message result = buffer.addMessage(message);
-        trigger(service, result);
-        return LOG.exit(result);
+        message = message.localizeTimestamp(service.getServerId(), null);
+        Message[] results = buffer.addMessages(message, MessageImpl.acknowledgement(message));
+        for (Message result: results) trigger(service, result);
+        return LOG.exit(results[1]);
     }
         
     @Override

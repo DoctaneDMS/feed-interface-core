@@ -12,6 +12,7 @@ import com.softwareplumbers.feed.FeedExceptions.StreamingException;
 import static com.softwareplumbers.feed.FeedExceptions.runtime;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.FeedService;
+import com.softwareplumbers.feed.Filters;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.MessageType;
@@ -171,7 +172,7 @@ public class TestUtils {
         ArrayList<Message> results = new ArrayList<>(count);
         try {
             while (count > 0) {
-                MessageIterator messages = service.listen(path, from, service.getServerId()).get(5, TimeUnit.SECONDS);
+                MessageIterator messages = service.listen(path, from, service.getServerId(), Filters.NO_ACKS).get(5, TimeUnit.SECONDS);
                 Message current = null;
                 while (messages.hasNext()) {
                     current = messages.next();
@@ -195,7 +196,7 @@ public class TestUtils {
     
     public static void createReceiver(int id, MessageBuffer buffer, int count, Instant from, Map<FeedPath,Message> results) {
         while (count > 0) {
-            MessageIterator messages = buffer.getMessagesAfter(from);
+            MessageIterator messages = buffer.getMessagesAfter(from, Filters.NO_ACKS);
             Message current = null;
             while (messages.hasNext()) {
                 current = messages.next();

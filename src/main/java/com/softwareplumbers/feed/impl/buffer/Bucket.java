@@ -15,13 +15,16 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.SequenceInputStream;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Stream;
 
@@ -39,8 +42,8 @@ class Bucket {
     private byte[] buffer;
     private int position;
     
-    private final NavigableMap<Instant, List<Message>> timeIndex;
-    private final Map<String, List<Message>> idIndex;
+    private final NavigableMap<Instant, Collection<Message>> timeIndex;
+    private final Map<String, Collection<Message>> idIndex;
     
     private class BufferOverflow extends IOException {
         
@@ -121,8 +124,8 @@ class Bucket {
         }
         
         Message buffered = new BufferedMessageImpl(chunk(endData, position), chunk(start, endData));
-        timeIndex.computeIfAbsent(message.getTimestamp(), key->new LinkedList<>()).add(buffered);
-        idIndex.computeIfAbsent(message.getId(), key->new LinkedList()).add(message);
+        timeIndex.computeIfAbsent(message.getTimestamp(), key->new ConcurrentLinkedQueue<>()).add(buffered);
+        idIndex.computeIfAbsent(message.getId(), key->new ConcurrentLinkedQueue()).add(message);
         return buffered;
     }
     

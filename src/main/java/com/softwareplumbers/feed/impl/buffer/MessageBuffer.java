@@ -102,6 +102,24 @@ public class MessageBuffer {
         return LOG.exit(result);
     }
     
+    public Message[] addMessages(Message... messages) {
+        LOG.entry((Object[])messages);
+        Message[] result = new Message[messages.length];
+        Instant timestamp;
+        try {
+            synchronized(this) {
+                timestamp = Instant.now(clock);
+                for (int i = 0; i < messages.length; i++) {
+                    Message timestamped = messages[i].setTimestamp(timestamp);
+                    result[i] = current.addMessage(timestamped, this::handleOverflow);
+                }
+            }
+        } catch (StreamingException e) {
+            throw runtime(e);
+        } 
+        return LOG.exit(result);
+    }
+    
     public Optional<Instant> firstTimestamp() {
         return Optional.ofNullable(bucketCache.firstEntry()).flatMap(entry->entry.getValue().firstTimestamp());
     }

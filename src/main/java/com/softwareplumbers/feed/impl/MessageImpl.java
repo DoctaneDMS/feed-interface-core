@@ -275,7 +275,7 @@ public class MessageImpl implements Message {
             return "MessageImpl[" + getHeaders() + "]";
     }
     
-    public static Message acknowledgement(Message message, Instant atTime, UUID atServer) {
-        return new MessageImpl(MessageType.ACK, message.getName(), null, atTime, Optional.of(atServer), Optional.empty(), JsonObject.EMPTY_JSON_OBJECT);
+    public static MessageImpl acknowledgement(Message message) {
+        return new MessageImpl(MessageType.ACK, message.getName(), null, message.getTimestamp(), message.getServerId(), Optional.empty(), JsonObject.EMPTY_JSON_OBJECT);
     }
 }
