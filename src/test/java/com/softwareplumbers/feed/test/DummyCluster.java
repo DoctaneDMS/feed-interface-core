@@ -37,7 +37,7 @@ public class DummyCluster implements Cluster {
         LOG.entry(service);
         synchronized(this) {
             service.initialize(this);
-            services.forEach(existing->existing.addRemote(service));
+            services.forEach(existing->existing.monitor(service));
             services.add(service);
         }
         LOG.exit();

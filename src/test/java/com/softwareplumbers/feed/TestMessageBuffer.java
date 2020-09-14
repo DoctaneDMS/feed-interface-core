@@ -213,7 +213,7 @@ public class TestMessageBuffer {
             dumpThreads();
             buffer.dumpState(new PrintWriter(System.out));
             for (Map<FeedPath,Message> resultMap : results) {
-                showDifference(getDifference(generated.get(10, TimeUnit.SECONDS).stream(), resultMap.values().stream()));
+                new Diff(generated.get(10, TimeUnit.SECONDS).stream(), resultMap.values().stream()).dump(System.err);
             }
             fail("receivers timed out");            
         }

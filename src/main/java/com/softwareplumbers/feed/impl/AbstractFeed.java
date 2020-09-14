@@ -10,7 +10,9 @@ import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.FeedService;
+import com.softwareplumbers.feed.Filters;
 import com.softwareplumbers.feed.Message;
+import com.softwareplumbers.feed.Message.RemoteInfo;
 import com.softwareplumbers.feed.MessageIterator;
 import com.softwareplumbers.feed.MessageType;
 import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
@@ -139,13 +141,28 @@ public class AbstractFeed implements Feed {
 
     @Override
     public CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
-        LOG.entry(getName(), service, from, serverId);
-        MessageIterator results = search(service, from, serverId, false, filters); // TODO: remove the false here.
+        LOG.entry(getName(), service, from, serverId, filters);
+        MessageIterator results = search(service, from, serverId, true, filters); 
         if (results.hasNext()) {
             LOG.debug("Found results, returning immediately");
             return LOG.exit(CompletableFuture.completedFuture(results));
         } else {
             Callback result = new Callback(filters);
+            synchronized(this) {
+                callbacks.computeIfAbsent(from, key -> new LinkedList()).add(result);
+            }
+            return LOG.exit(result.future);            
+        }
+    }
+
+    public CompletableFuture<MessageIterator> watch(AbstractFeedService service, Instant from) {
+        LOG.entry(getName(), service, from);
+        MessageIterator results = search(service, from, service.getServerId(), false, Filters.POSTED_LOCALLY); 
+        if (results.hasNext()) {
+            LOG.debug("Found results, returning immediately");
+            return LOG.exit(CompletableFuture.completedFuture(results));
+        } else {
+            Callback result = new Callback(Filters.POSTED_LOCALLY);
             synchronized(this) {
                 callbacks.computeIfAbsent(from, key -> new LinkedList()).add(result);
             }
@@ -195,9 +212,15 @@ public class AbstractFeed implements Feed {
     public Message replicate(AbstractFeedService service, Message message) {
         LOG.entry(getName(), service, message);
         message = message.localizeTimestamp(service.getServerId(), null);
-        Message[] results = buffer.addMessages(message, MessageImpl.acknowledgement(message));
-        for (Message result: results) trigger(service, result);
-        return LOG.exit(results[1]);
+        if (message.getType() == MessageType.ACK) {
+            Message result = buffer.addMessage(message);
+            trigger(service, result);
+            return result;
+        } else {
+            Message[] results = buffer.addMessages(message, MessageImpl.acknowledgement(message));
+            for (Message result: results) trigger(service, result);
+            return LOG.exit(results[1]);
+        }
     }
         
     @Override
@@ -225,29 +248,38 @@ public class AbstractFeed implements Feed {
         return LOG.exit(buffer.getMessages(id, filter));
     }
     
+    /** Return a filter that will find a message based on its timestamp on some other node.
+     * 
+     * @param service The feed service (i.e. the local node)
+     * @param from Lower bound for timestamp (exclusive)
+     * @param to Upper bound for timestamp (inclusive)
+     * @param serverId Id of remote node
+     * @return A predicate object implementing the specified filter
+     */
     private Predicate<Message> filterByServerPerspective(AbstractFeedService service, Instant from, Instant to, UUID serverId) {
-        // Transform messages timestamp another server's perspective. For each message, we should
-        // have an ack saying when it arrived on that server. So the message timestamp becomes the
-        // ack timestamp, while the ack timestamp for messages originally posted to this server becomes
-        // the message timestamp
+        // Filter based on the time a message was received on some other server
+        final Instant initTime = service.getCluster().getService(serverId)
+            .orElseThrow(()->new RuntimeException("invalid server id " + serverId))
+            .getInitTime();
+        
         return message -> {
             Instant timestamp = message.getTimestamp();
-            if (message.getType() == MessageType.ACK) {
-                // This message is an ACK
-                if (message.getServerId().equals(service.getServerId())) {
-                    timestamp = buffer.getMessages(message.getId(), m -> m.getType() != MessageType.ACK) // Find the corresponding non-ack
-                        .toStream()
-                        .findAny()
-                        .map(Message::getTimestamp) // Get the timestamp of the main message
-                        .orElse(timestamp);
-                } 
+            if (message.getRemoteInfo().isPresent()) {
+                // it's a message from a remote
+                RemoteInfo remoteInfo = message.getRemoteInfo().get();
+                if (remoteInfo.serverId.equals(serverId)) {
+                    // the only remote messages we need to futz with are the ones sent by the specified serverId;
+                    // in this case we use the remote timestamp already in the message
+                    timestamp = remoteInfo.timestamp;
+                }
             } else {
-                // This message is not an ACK
-                timestamp = buffer.getMessages(message.getId(), m -> m.getType() == MessageType.ACK && m.getServerId().equals(serverId)) // Find the ACK from the requested server
-                    .toStream()
-                    .findAny()
-                    .map(Message::getTimestamp) // Get the timestamp of the ack
-                    .orElse(timestamp);
+                // its a message that was posted locally. In this case we just need to switch the timestamp with
+                // the one that was reported in the Ack from the specified server.
+                timestamp = buffer.getMessages(message.getId(), Filters.IS_ACK, Filters.fromRemote(serverId))
+                   .toStream()
+                   .findAny() // Find any ACK from the specified server 
+                   .map(Message::getTimestamp)
+                   .orElse(timestamp.isBefore(initTime) ? timestamp : initTime); // Haven't received the ack yet, or this is a request from a new node
             }
             return timestamp.isAfter(from) && !to.isBefore(timestamp);
         };
@@ -260,10 +292,12 @@ public class AbstractFeed implements Feed {
         boolean bufferedDataComplete;
         AbstractFeedService service = cast(svc);
         
-        // Fetch any locally bufffered data
+        // Fetch any locally buffered data
         if (serverId == null || serverId.equals(service.getServerId())) {
             result = buffer.getMessagesBetween(from, fromInclusive, to, toInclusive, filters);
+            LOG.debug("First message in buffer at {}", buffer.firstTimestamp());
             bufferedDataComplete = buffer.firstTimestamp().map(first->!first.isAfter(from)).orElse(false);
+            LOG.debug("Buffered data considered complete: {}", bufferedDataComplete);
         } else {
             Instant acksFrom = from.minusSeconds(service.getAckTimeout()); // Add extra time to ensure we fetch all the acks
             Predicate<Message> filter = Stream.of(filters).reduce(message->true,  Predicate::and);        
@@ -293,6 +327,14 @@ public class AbstractFeed implements Feed {
             result = MessageIterator.merge(feeds);            
         }
 
+        if (LOG.isTraceEnabled()) {
+            if (result.hasNext()) {
+                result = result.peekable();
+                LOG.trace("search returning results starting from {}", ((MessageIterator.Peekable)result).peek().get().getTimestamp());
+            } else {
+                LOG.trace("search returns no results");
+            }
+        }
         return LOG.exit(result);
     }
     
@@ -318,6 +360,7 @@ public class AbstractFeed implements Feed {
             for (FeedService remote : (Iterable<FeedService>)remotes::iterator) {
                 MessageIterator.Peekable remoteResult = remote.search(getName(), from, fromInclusive, to, toInclusive, serverId, false, filters).peekable();
                 Instant remoteFrom = remoteResult.peek().map(message->message.getTimestamp()).orElse(Instant.MAX);
+                LOG.debug("Relay search found messages between {} and {} on serverId {}", from, to, remote.getServerId());
                 if (toInclusive && !remoteFrom.isAfter(to) || remoteFrom.isBefore(to)) {
                     result = MessageIterator.of(remoteResult, result);
                     to = remoteFrom;

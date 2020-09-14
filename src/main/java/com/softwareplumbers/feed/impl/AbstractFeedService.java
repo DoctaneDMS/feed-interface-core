@@ -52,20 +52,8 @@ public abstract class AbstractFeedService implements FeedService {
     private final long ackTimeout = 600; // 10 minutes
     private final Map<UUID, Remote> remotes = new ConcurrentHashMap<>();
     private Cluster cluster;
+    private final Instant initTime;
 
-    private static final boolean wasPostedLocally(Message message) { LOG.entry(message); return LOG.exit(!message.getRemoteInfo().isPresent()); }
-
-    private static <T> Predicate<T> trace(Function<T,String> message, Predicate<T> predicate) {
-        return LOG.isTraceEnabled() 
-            ? t-> {
-                LOG.trace(message.apply(t));
-                boolean result = predicate.test(t);
-                LOG.trace("result: {}", result);
-                return result;
-            } 
-            : predicate;
-    }
-    
     /** Create a new Abstract Feed Service.
      * 
      * @param serverId An identifier for this service
@@ -80,22 +68,22 @@ public abstract class AbstractFeedService implements FeedService {
         this.rootFeed = new AbstractFeed(createBuffer());
         this.serverId = serverId;
         this.cluster = Cluster.local(this);
-                
+        this.initTime = clock.instant();               
     }
     
+    @Override
     public void initialize(Cluster cluster) {
         LOG.entry(cluster);
         this.cluster = cluster;
         cluster.getServices(service->!Objects.equals(service.getServerId(), serverId))
-            .forEach(this::addRemote);
+            .forEach(this::monitor);
         LOG.exit();
     }
     
+    
     @Override
-    public void addRemote(FeedService remoteService) {
-        LOG.entry(remoteService);
-        remotes.computeIfAbsent(remoteService.getServerId(), uuid->new Remote(remoteService));
-        LOG.exit();
+    public void monitor(FeedService remoteService) {
+        remotes.computeIfAbsent(remoteService.getServerId(), uuid->new Remote(remoteService)).startMonitor();
     }
     
     void callback(Runnable callback) {
@@ -119,6 +107,10 @@ public abstract class AbstractFeedService implements FeedService {
     public Cluster getCluster() {
         return cluster;
     }
+    
+    public Instant getInitTime() {
+        return initTime;
+    }
 
     @Override
     public CompletableFuture<MessageIterator> listen(FeedPath path, Instant from, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
@@ -129,7 +121,7 @@ public abstract class AbstractFeedService implements FeedService {
     @Override
     public CompletableFuture<MessageIterator> watch(UUID serverId, Instant from) {
         LOG.entry(serverId);
-        return LOG.exit(rootFeed.listen(this, from, getServerId(), AbstractFeedService::wasPostedLocally));
+        return LOG.exit(rootFeed.watch(this, from));
     }
 
     @Override
@@ -193,6 +185,7 @@ public abstract class AbstractFeedService implements FeedService {
         private Optional<Throwable> lastException = Optional.empty();
         private long receivedCount = 0;
         private long errorCount = 0;
+        private Instant startedWatchingMe;
         
         private void monitorCallback(MessageIterator messages, Throwable exception) {
             LOG.entry(messages, exception);
@@ -222,9 +215,12 @@ public abstract class AbstractFeedService implements FeedService {
         public Remote(FeedService remote) {
             LOG.entry(remote);
             this.remote = remote;
-            remote.watch(getServerId(), clock.instant()).whenComplete(this::monitorCallback);
             LOG.exit();
         }    
+        
+        public void startMonitor() {
+            remote.watch(getServerId(), initTime).whenComplete(this::monitorCallback);            
+        }
         
         public void dumpState(PrintWriter out) {
             out.println(String.format(
@@ -234,6 +230,14 @@ public abstract class AbstractFeedService implements FeedService {
                 errorCount, 
                 lastException.map(t->t.getMessage()).orElse("none")
             ));
+        }
+        
+        public void setStartWatchingMe(Instant startedWatchingMe) {
+            this.startedWatchingMe = startedWatchingMe;
+        }
+        
+        public Instant getStartWatchingMe() {
+            return startedWatchingMe;
         }
     }
 }

@@ -7,6 +7,7 @@ package com.softwareplumbers.feed.test;
 
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.common.pipedstream.OutputStreamConsumer;
+import com.softwareplumbers.feed.Feed;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import com.softwareplumbers.feed.FeedExceptions.StreamingException;
 import static com.softwareplumbers.feed.FeedExceptions.runtime;
@@ -53,6 +54,8 @@ import static org.junit.Assert.fail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -218,17 +221,74 @@ public class TestUtils {
         }
     }
         
+    public static class Diff {
+        public final Set<Message> notReceived = new TreeSet<>(TestUtils::compare);
+        public final List<Message> notSent = new ArrayList<>();
+        public final List<Message> duplicatesSent = new ArrayList<>();
+        public final List<Message> duplicatesReceived = new ArrayList<>();
+        public int totalReceived = 0;
+        public int totalSent = 0;
+        public Instant firstMessageReceivedAt = Instant.MAX;
+        public Instant lastMessageReceivedAt = Instant.MIN;
     
-    public static Map<FeedPath,String> getDifference(Stream<Message> sent, Stream<Message> received) {
-        Map<FeedPath,String> diff = new TreeMap<>();
-        sent.forEach(message->diff.put(message.getName(), "NOT RECEIVED: " + dumpMessage(message)));
-        received.forEach(message->diff.merge(message.getName(), "NOT SENT: " + dumpMessage(message), (o,n)->null));
-        return diff;
+        public Diff(Stream<Message> sent, Stream<Message> received) {
+            Set<Message> allSent = new TreeSet<>(TestUtils::compare); 
+            Set<Message> allReceived = new TreeSet<>(TestUtils::compare); 
+            sent.forEach(message-> {
+                totalSent++;
+                if (allSent.add(message)) 
+                    notReceived.add(message);
+                else
+                    duplicatesSent.add(message);
+                
+            });
+            received.forEach(message->{
+                totalReceived++;
+                Instant timestamp = message.getTimestamp();
+                firstMessageReceivedAt = firstMessageReceivedAt.isAfter(timestamp) ? timestamp : firstMessageReceivedAt;
+                lastMessageReceivedAt = lastMessageReceivedAt.isBefore(timestamp) ? timestamp : lastMessageReceivedAt;
+                if (allReceived.add(message)) {
+                    if (!notReceived.remove(message)) 
+                        notSent.add(message);                    
+                } else
+                    duplicatesReceived.add(message);
+            });
+        }
+        
+        public void dump(PrintStream out) {
+            out.format("Total received: %d\n", totalReceived);
+            out.format("Total sent: %d\n", totalSent);
+            out.format("First message received at: %s\n", firstMessageReceivedAt);
+            out.format("Last message received at: %s\n", lastMessageReceivedAt);
+            out.format("Duplicates received: %d\n", duplicatesReceived.size());
+            duplicatesReceived.forEach(message->out.println(dumpMessage(message)));
+            out.format("Duplicates sent: %d\n", duplicatesSent.size());
+            duplicatesSent.forEach(message->out.println(dumpMessage(message)));
+            out.format("Messages not received: %d\n", notReceived.size());
+            notReceived.forEach(message->out.println(dumpMessage(message)));
+            out.format("Messages not sent: %d\n", notSent.size());
+            notSent.forEach(message->out.println(dumpMessage(message)));                 
+        }
+        
+        public boolean isEmpty() {
+            return totalReceived == totalSent && duplicatesReceived.size() == 0 && duplicatesSent.size() == 0 && notReceived.size() == 0 && notSent.size() == 0;
+        }
+    }
+    
+    public static <T extends Comparable> int compare(Optional<T> a, Optional<T> b) { 
+        if (a.isPresent() && b.isPresent()) return a.get().compareTo(b.get());
+        if (a.isPresent()) return 1;
+        if (b.isPresent()) return -0;
+        return 0;
     }
 
     public static int compare(Message a, Message b) {
         int result = a.getFeedName().compareTo(b.getFeedName());
         if (result != 0) return result;
+        result = a.getType().compareTo(b.getType());
+        if (result != 0) return result;
+        result = Comparator.nullsFirst(String::compareTo).compare(a.getSender(), b.getSender());
+        if (result != 0) return result;        
         result = a.getHeaders().toString().compareTo(b.getHeaders().toString());
         if (result != 0) return result;
         result = asString(a.getData()).compareTo(asString(b.getData()));
@@ -243,18 +303,22 @@ public class TestUtils {
     }
        
     public static void assertMatch(Stream<Message> sent, Stream<Message> received) {
-        AtomicInteger sentCount = new AtomicInteger(0);
-        AtomicInteger receivedCount = new AtomicInteger(0);
-        Map<FeedPath, String> difference = getDifference(sent.peek(message->sentCount.incrementAndGet()), received.peek(message->receivedCount.incrementAndGet()));
-        if (difference.size() > 0) {
-            showDifference(difference);
-            fail("Sent and received messages do not match; sent " + sentCount + " and received " + receivedCount); 
+        Diff difference = new Diff(sent, received);
+        if (!difference.isEmpty()) {
+            difference.dump(System.err);
+            fail("Sent and received messages do not match"); 
         }
     }
     
-    public static void showDifference(Map<FeedPath, String> difference) {
-        for (Map.Entry<FeedPath,String> entry : difference.entrySet()) {
-            System.out.println(entry.getValue() + ":" + entry.getKey());
+    public static void assertNoMore(FeedService node, Feed feed, Message last) {
+        MessageIterator more = feed.search(node, last.getTimestamp(), last.getServerId().get(), Filters.NO_ACKS);
+        if (more.hasNext()) {
+            int count = 0;
+            while (more.hasNext()) {
+                System.err.println("Extra message: " + more.next());
+                count++;
+            }
+            fail(count + " extra messages for " + feed.getName());
         }
     }
     

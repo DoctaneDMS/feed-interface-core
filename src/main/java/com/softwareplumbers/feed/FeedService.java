@@ -59,7 +59,15 @@ public interface FeedService {
      */
     void initialize(Cluster cluster);
     
-    void addRemote(FeedService service);
+    /** Monitor a remote feed service for new messages.
+     * 
+     * Typically called automatically during feed initialization.
+     * 
+     * @param service 
+     */
+    void monitor(FeedService service);
+    
+    Instant getInitTime();
     
     /** Get all messages sharing the given message Id.
      * 
