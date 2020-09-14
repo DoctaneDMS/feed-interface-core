@@ -169,6 +169,8 @@ public interface FeedService {
      */
     Message post(FeedPath path, Message message) throws InvalidPath;
     
+    Message replicate(Message message);
+    
     /** Get the Id of this server instance.
      * 
      * Different servers may have a different view of the sequence in which messages arrive. To

@@ -5,7 +5,8 @@
  */
 package com.softwareplumbers.feed.test;
 
-import com.softwareplumbers.feed.impl.AbstractFeedService;
+import com.softwareplumbers.feed.impl.BufferingFeedService;
+import com.softwareplumbers.feed.impl.buffer.MessageClock;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 
@@ -13,10 +14,10 @@ import java.util.concurrent.Executors;
  *
  * @author jonathan
  */
-public class DummyFeedService extends AbstractFeedService {
+public class DummyFeedService extends BufferingFeedService {
     
     public DummyFeedService(long poolSize, int bucketSize) {
-        super(UUID.randomUUID(), Executors.newFixedThreadPool(5), poolSize, bucketSize);
+        super(UUID.randomUUID(), Executors.newFixedThreadPool(5), new MessageClock(), poolSize, bucketSize);
     }
 
     @Override

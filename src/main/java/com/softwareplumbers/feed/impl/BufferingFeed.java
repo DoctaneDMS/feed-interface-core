@@ -39,9 +39,9 @@ import org.slf4j.ext.XLoggerFactory;
  *
  * @author Jonathan Essex. 
  */
-public class AbstractFeed implements Feed {
+public class BufferingFeed implements Feed {
     
-    private static final XLogger LOG = XLoggerFactory.getXLogger(AbstractFeed.class);
+    private static final XLogger LOG = XLoggerFactory.getXLogger(BufferingFeed.class);
     
     private static class Callback {
         public final CompletableFuture<MessageIterator> future;
@@ -59,44 +59,43 @@ public class AbstractFeed implements Feed {
         }
     }
        
-    private final Optional<AbstractFeed> parentFeed;
+    private final Optional<BufferingFeed> parentFeed;
     private final Optional<String> name;
     private final NavigableMap<Instant, List<Callback>> callbacks = new TreeMap<>();
-    private final Map<String, AbstractFeed> children = new ConcurrentHashMap<>();
+    private final Map<String, BufferingFeed> children = new ConcurrentHashMap<>();
     private final MessageBuffer buffer;
     
-    private AbstractFeed(MessageBuffer buffer, AbstractFeed parentFeed, String name) {
+    private BufferingFeed(MessageBuffer buffer, BufferingFeed parentFeed, String name) {
         this.parentFeed = Optional.of(parentFeed);
         this.name = Optional.of(name);
         this.buffer = buffer;
     }
     
-    private static AbstractFeedService cast(FeedService service) {
+    private static BufferingFeedService cast(FeedService service) {
         try {
-            return (AbstractFeedService)service;
+            return (BufferingFeedService)service;
         } catch (ClassCastException e) {
             throw new RuntimeException("Can only use AbstractFeed with AbstractFeedService", e);
         }
     }
     
-    public AbstractFeed(MessageBuffer buffer) {
+    public BufferingFeed(MessageBuffer buffer) {
         this.parentFeed = Optional.empty();
         this.name = Optional.empty(); 
         this.buffer = buffer;
     }
     
-    public AbstractFeed getFeed(FeedService service, FeedPath path) throws InvalidPath {
+    public BufferingFeed getFeed(FeedService service, FeedPath path) throws InvalidPath {
         LOG.entry(getName(), service, path);
         if (path.isEmpty()) return this;
-        AbstractFeed parent = getFeed(service, path.parent);
-        return LOG.exit(
-            path.part.getName()
-                .map(name->parent.children.computeIfAbsent(name, key -> new AbstractFeed(cast(service).createBuffer(), parent, key)))
+        BufferingFeed parent = getFeed(service, path.parent);
+        return LOG.exit(path.part.getName()
+                .map(name->parent.children.computeIfAbsent(name, key -> new BufferingFeed(cast(service).createBuffer(), parent, key)))
                 .orElseThrow(()->LOG.throwing(new InvalidPath(path)))
         );
     }
               
-    private void trigger(AbstractFeedService service, Message message) {
+    private void trigger(BufferingFeedService service, Message message) {
         LOG.entry(service, message);
         synchronized(this) {
             Iterator<Map.Entry<Instant, List<Callback>>> activated = callbacks.headMap(message.getTimestamp(), false).entrySet().iterator();
@@ -155,7 +154,7 @@ public class AbstractFeed implements Feed {
         }
     }
 
-    public CompletableFuture<MessageIterator> watch(AbstractFeedService service, Instant from) {
+    public CompletableFuture<MessageIterator> watch(BufferingFeedService service, Instant from) {
         LOG.entry(getName(), service, from);
         MessageIterator results = search(service, from, service.getServerId(), false, Filters.POSTED_LOCALLY); 
         if (results.hasNext()) {
@@ -186,7 +185,7 @@ public class AbstractFeed implements Feed {
     @Override
     public Message post(FeedService service, Message message) {
         LOG.entry(getName(), service, message);
-        AbstractFeedService svc = cast(service);
+        BufferingFeedService svc = cast(service);
         message = message
             .setName(getName().addId(svc.generateMessageId()))
             .setServerId(service.getServerId());
@@ -209,7 +208,7 @@ public class AbstractFeed implements Feed {
      * @param message
      * @return 
      */
-    public Message replicate(AbstractFeedService service, Message message) {
+    public Message replicate(BufferingFeedService service, Message message) {
         LOG.entry(getName(), service, message);
         message = message.localizeTimestamp(service.getServerId(), null);
         if (message.getType() == MessageType.ACK) {
@@ -234,10 +233,9 @@ public class AbstractFeed implements Feed {
     }
     
     private Instant checkpoint() {
-        return Stream.concat(
-            Stream.of(
+        return Stream.concat(Stream.of(
                 buffer.checkpoint()), 
-                children.values().stream().map(AbstractFeed::checkpoint)
+                children.values().stream().map(BufferingFeed::checkpoint)
             ).min(Comparator.naturalOrder())
             .orElseThrow(()->new RuntimeException("Failed checkpoint"));
     }
@@ -256,7 +254,7 @@ public class AbstractFeed implements Feed {
      * @param serverId Id of remote node
      * @return A predicate object implementing the specified filter
      */
-    private Predicate<Message> filterByServerPerspective(AbstractFeedService service, Instant from, Instant to, UUID serverId) {
+    private Predicate<Message> filterByServerPerspective(BufferingFeedService service, Instant from, Instant to, UUID serverId) {
         // Filter based on the time a message was received on some other server
         final Instant initTime = service.getCluster().getService(serverId)
             .orElseThrow(()->new RuntimeException("invalid server id " + serverId))
@@ -290,7 +288,7 @@ public class AbstractFeed implements Feed {
         LOG.entry(getName(), svc, from, fromInclusive, to, toInclusive, serverId, relay, filters);
         MessageIterator result;
         boolean bufferedDataComplete;
-        AbstractFeedService service = cast(svc);
+        BufferingFeedService service = cast(svc);
         
         // Fetch any locally buffered data
         if (serverId == null || serverId.equals(service.getServerId())) {
@@ -348,12 +346,12 @@ public class AbstractFeed implements Feed {
         buffer.dumpState(out);
     }
     
-    public Stream<AbstractFeed> getLiveFeeds() {        
-        Stream<AbstractFeed> result = children.values().stream().flatMap(AbstractFeed::getLiveFeeds);
+    public Stream<BufferingFeed> getLiveFeeds() {        
+        Stream<BufferingFeed> result = children.values().stream().flatMap(BufferingFeed::getLiveFeeds);
         return buffer.isEmpty() ? result : Stream.concat(Stream.of(this), result);
     }
     
-    public MessageIterator relay(AbstractFeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
+    public MessageIterator relay(BufferingFeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
         LOG.entry(getName(), service, from, fromInclusive, to, toInclusive, serverId, filters);
         MessageIterator result = MessageIterator.EMPTY;
         try (Stream<FeedService> remotes = service.getCluster().getServices(remote -> !Objects.equals(service.getServerId(), remote.getServerId()))) {
