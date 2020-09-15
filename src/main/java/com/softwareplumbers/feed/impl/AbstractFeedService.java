@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
@@ -168,4 +169,58 @@ public abstract class AbstractFeedService implements FeedService {
     }
     
     protected abstract String generateMessageId();
+    
+        /** Post a message.
+     * 
+     * The given message is submitted to the message buffer.
+     * 
+     * @param path
+     * @param message
+     * @return
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
+     */
+    @Override
+    public Message post(FeedPath path, Message message) throws FeedExceptions.InvalidPath {
+        LOG.entry(path, message);
+        return LOG.exit(getFeed(path).post(this, message));
+    }
+    
+    @Override
+    public Message replicate(Message message) {
+        LOG.entry(message);
+        try {
+            return LOG.exit(getFeed(message.getFeedName()).replicate(this, message));
+        } catch (FeedExceptions.InvalidPath e) {
+            throw FeedExceptions.runtime(e);
+        }
+    }
+
+    @Override
+    public CompletableFuture<MessageIterator> listen(FeedPath path, Instant from, UUID serverId, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
+        LOG.entry(path, from);
+        return LOG.exit(getFeed(path).listen(this, from, serverId, filters));
+    }
+    
+
+
+    @Override
+    public MessageIterator search(FeedPath path, Instant from, UUID serverId, boolean relay, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
+        LOG.entry(path, from, serverId);
+        return LOG.exit(getFeed(path).search(this, from, serverId, relay, filters));
+
+    }
+    
+    @Override
+    public MessageIterator search(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, boolean relay, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
+        LOG.entry(path, from, fromInclusive, to, toInclusive, serverId);
+        return LOG.exit(getFeed(path).search(this, from, fromInclusive, to, toInclusive, serverId, relay, filters));
+    }
+            
+    @Override
+    public MessageIterator search(FeedPath path, Predicate<Message>... filters) throws FeedExceptions.InvalidPath, FeedExceptions.InvalidId {
+        LOG.entry(path, filters);
+        if (path.isEmpty()) throw new FeedExceptions.InvalidPath(path);
+        String id = path.part.getId().orElseThrow(()->new FeedExceptions.InvalidId(path.parent, path.part.toString()));
+        return LOG.exit(getFeed(path.parent).search(this, id, filters));
+    }  
 }
