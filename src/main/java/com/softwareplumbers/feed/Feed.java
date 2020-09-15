@@ -56,6 +56,10 @@ public interface Feed {
             throw new FeedExceptions.BaseRuntimeException(e);
         }        
     }
+    
+    default Message replicate(FeedService service, Message message) {
+        return service.replicate(message);
+    }
 
     /** Get all messages sharing the given message Id.
      * 

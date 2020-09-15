@@ -6,6 +6,9 @@
 package com.softwareplumbers.feed.impl;
 
 import com.softwareplumbers.feed.Cluster;
+import com.softwareplumbers.feed.Feed;
+import com.softwareplumbers.feed.FeedExceptions;
+import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.FeedService;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
@@ -16,8 +19,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.stream.Stream;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
 
@@ -86,14 +91,21 @@ public abstract class AbstractFeedService implements FeedService {
     private final Map<UUID, Remote> remotes = new ConcurrentHashMap<>();
     protected Cluster cluster;
     protected final Instant initTime;
-    
-    public AbstractFeedService(UUID serverId, ExecutorService callbackExecutor, Instant initTime) {
+    private final AbstractFeed rootFeed;
+    private final long ackTimeout = 600; // 10 minutes
+
+    public AbstractFeedService(UUID serverId, ExecutorService callbackExecutor, Instant initTime, AbstractFeed rootFeed) {
         this.callbackExecutor = callbackExecutor;
         this.serverId = serverId;
         this.cluster = Cluster.local(this);
         this.initTime = initTime;          
+        this.rootFeed = rootFeed;
+
     }
     
+    public long getAckTimeout() {
+        return ackTimeout;
+    }
     
     @Override
     public void initialize(Cluster cluster) {
@@ -125,8 +137,29 @@ public abstract class AbstractFeedService implements FeedService {
     public Instant getInitTime() {
         return initTime;
     }
+    
+    @Override
+    public Stream<Feed> getFeeds() {
+        return rootFeed.getDescendents().map(Feed.class::cast);
+    }
 
     public void dumpState(PrintWriter out) throws IOException {
         remotes.values().forEach(remote->remote.dumpState(out));
+        getFeeds().forEachOrdered(feed->((AbstractFeed)feed).dumpState(out));
     }
+    
+    @Override
+    public Feed getFeed(FeedPath path) throws FeedExceptions.InvalidPath {
+        return rootFeed.getFeed(this, path);
+    }
+    
+    public abstract AbstractFeed createFeed(AbstractFeed parent, String name);
+    
+    @Override
+    public CompletableFuture<MessageIterator> watch(UUID serverId, Instant from) {
+        LOG.entry(serverId);
+        return LOG.exit(rootFeed.watch(this, from));
+    }    
+    
+    protected abstract String generateMessageId();
 }

@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 
 /** Feed Service interface.
@@ -192,4 +193,6 @@ public interface FeedService {
     Cluster getCluster();
     
     public Feed getFeed(FeedPath path) throws InvalidPath;
+    
+    public Stream<Feed> getFeeds();
 }
