@@ -107,11 +107,6 @@ public abstract class BufferingFeedService extends AbstractFeedService {
             throw FeedExceptions.runtime(e);
         }
     }
-    
-    @Override
-    public UUID getServerId() {
-        return serverId;
-    }
         
     @Override
     public MessageIterator search(FeedPath path, Predicate<Message>... filters) throws InvalidPath, InvalidId {

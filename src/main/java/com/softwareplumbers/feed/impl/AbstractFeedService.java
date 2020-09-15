@@ -161,5 +161,11 @@ public abstract class AbstractFeedService implements FeedService {
         return LOG.exit(rootFeed.watch(this, from));
     }    
     
+        
+    @Override
+    public UUID getServerId() {
+        return serverId;
+    }
+    
     protected abstract String generateMessageId();
 }
