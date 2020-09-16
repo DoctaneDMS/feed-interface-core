@@ -18,7 +18,8 @@ public class FeedExceptions {
         INVALID_PATH,
         INVALID_JSON,
         INVALID_ID,
-        STREAMING_EXCEPTION
+        STREAMING_EXCEPTION,
+        STORAGE_EXCEPTION
     }
     
     /** Base exception.
@@ -80,6 +81,30 @@ public class FeedExceptions {
         }    
     }
     
+    public static class StorageException extends BaseException {
+        public StorageException(Exception e) {
+            super(Type.STORAGE_EXCEPTION, e);
+        }
+        public StorageException(String reason) {
+            super(Type.STORAGE_EXCEPTION, reason);
+        }
+        public static Optional<String> getReason(JsonObject object) {
+            try {
+                return Optional.of(object.getString("reason"));
+            } catch (Exception e) {
+                return Optional.empty();
+            }
+        }
+        @Override
+        public JsonObjectBuilder buildJson(JsonObjectBuilder bldr) {
+            Throwable e = getCause();
+            if (e == null)
+                return super.buildJson(bldr).add("reason", getMessage());
+            else    
+                return super.buildJson(bldr).add("reason", e.getMessage());
+        }    
+    }
+    
     /** Throw if a path is invalid
      * 
      */
@@ -108,6 +133,7 @@ public class FeedExceptions {
                 return Optional.empty();
             }
         }
+        @Override
         public JsonObjectBuilder buildJson(JsonObjectBuilder bldr) {
             bldr = super.buildJson(bldr).add("reason", reason);
             if (json.isPresent()) bldr = bldr.add("json", json.get());
@@ -131,6 +157,7 @@ public class FeedExceptions {
                 return Optional.empty();
             }
         }
+        @Override
         public JsonObjectBuilder buildJson(JsonObjectBuilder bldr) {
             return super.buildJson(bldr).add("path", path.toString());
         }
@@ -161,6 +188,7 @@ public class FeedExceptions {
                 return Optional.empty();
             }
         }
+        @Override
         public JsonObjectBuilder buildJson(JsonObjectBuilder bldr) {
             return super.buildJson(bldr).add("path", path.toString()).add("id", id);
         }
@@ -178,6 +206,8 @@ public class FeedExceptions {
                     return new InvalidId(InvalidId.getPath(json).orElseThrow(()->new InvalidJson("missing path", json)), InvalidId.getId(json).orElseThrow(()->new InvalidJson("missing id", json)));
                 case STREAMING_EXCEPTION:
                     return new StreamingException(StreamingException.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)));
+                case STORAGE_EXCEPTION:
+                    return new StorageException(StorageException.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)));
                 default:
                     throw new InvalidJson("invalid type value", json);
             }
