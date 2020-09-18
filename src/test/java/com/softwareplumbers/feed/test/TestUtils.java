@@ -311,7 +311,7 @@ public class TestUtils {
     }
     
     public static void assertNoMore(FeedService node, Feed feed, Message last) {
-        MessageIterator more = feed.search(node, last.getTimestamp(), last.getServerId().get(), Filters.NO_ACKS);
+        MessageIterator more = feed.search(node, last.getServerId().get(), last.getTimestamp(), Filters.NO_ACKS);
         if (more.hasNext()) {
             int count = 0;
             while (more.hasNext()) {

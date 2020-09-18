@@ -151,7 +151,7 @@ public abstract class AbstractFeed implements Feed {
                     if (!callback.future.isCancelled()) {
                         if (callback.predicate.test(message)) {
                             service.callback(() -> { 
-                                MessageIterator messages = search(service, entryTimestamp, service.getServerId(), false, callback.predicate);
+                                MessageIterator messages = search(service, service.getServerId(), entryTimestamp, Optional.of(false), callback.predicate);
                                 if (messages.hasNext()) {
                                     LOG.trace("Completing callback with messages");
                                     callback.future.complete(messages);
@@ -184,7 +184,7 @@ public abstract class AbstractFeed implements Feed {
     @Override
     public CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
         LOG.entry(getName(), service, from, serverId, filters);
-        MessageIterator results = search(service, from, serverId, true, filters); 
+        MessageIterator results = search(service, serverId, from, filters); 
         if (results.hasNext()) {
             LOG.debug("Found results, returning immediately");
             return LOG.exit(CompletableFuture.completedFuture(results));
@@ -199,7 +199,7 @@ public abstract class AbstractFeed implements Feed {
 
     public CompletableFuture<MessageIterator> watch(FeedService service, Instant from) {
         LOG.entry(getName(), service, from);
-        MessageIterator results = search(service, from, service.getServerId(), false, Filters.POSTED_LOCALLY); 
+        MessageIterator results = search(service, service.getServerId(), from, Optional.of(false), Filters.POSTED_LOCALLY); 
         if (results.hasNext()) {
             LOG.debug("Found results, returning immediately");
             return LOG.exit(CompletableFuture.completedFuture(results));
@@ -220,12 +220,12 @@ public abstract class AbstractFeed implements Feed {
         return children.values().stream().flatMap(child->Stream.concat(Stream.of(child), child.getDescendents()));
     }
     
-    public abstract MessageIterator localSearch(FeedService svc, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, Predicate<Message>... filters);
+    public abstract MessageIterator localSearch(FeedService svc, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Predicate<Message>... filters);
     
     public abstract boolean hasCompleteData(FeedService svc, Instant from);
     
     @Override
-    public MessageIterator search(FeedService svc, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, boolean relay, Predicate<Message>... filters) {
+    public MessageIterator search(FeedService svc, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive,  Optional<Boolean> relay, Predicate<Message>... filters) {
         LOG.entry(getName(), svc, from, fromInclusive, to, toInclusive, serverId, relay, filters);
         MessageIterator result;
         boolean bufferedDataComplete;
@@ -245,13 +245,13 @@ public abstract class AbstractFeed implements Feed {
 
         LOG.debug("Buffered data considered complete: {}", bufferedDataComplete);
 
-        if (!bufferedDataComplete && relay) {
+        if (!bufferedDataComplete && relay.orElse(true)) {
             try {
                 if (result.hasNext()) {
                     Message first = result.next();
-                    result = MessageIterator.of(relay(service, from, fromInclusive, first.getTimestamp(), false, serverId, filters), MessageIterator.of(first), result);
+                    result = MessageIterator.of(relay(service, serverId, from, fromInclusive, Optional.of(first.getTimestamp()), Optional.of(false), filters), MessageIterator.of(first), result);
                 } else {
-                    result = relay(service, from, fromInclusive, to, toInclusive, serverId, filters);
+                    result = relay(service, serverId, from, fromInclusive, to, toInclusive, filters);
                 }
             } catch (FeedExceptions.InvalidPath exp) {
                 // Invalid path shouldn't happen here
@@ -261,7 +261,7 @@ public abstract class AbstractFeed implements Feed {
         
         Stream<MessageIterator> feeds = Stream.concat(
             Stream.of(result), 
-            getChildren().map(feed->feed.search(service, from, fromInclusive, to, toInclusive, serverId, relay, filters))
+            getChildren().map(feed->feed.search(service, serverId, from, fromInclusive, to, toInclusive, relay, filters))
         );
         
         result = MessageIterator.merge(feeds);
@@ -277,18 +277,18 @@ public abstract class AbstractFeed implements Feed {
         return LOG.exit(result);
     }    
     
-    public MessageIterator relay(FeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
+    public MessageIterator relay(FeedService service, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
         LOG.entry(getName(), service, from, fromInclusive, to, toInclusive, serverId, filters);
         MessageIterator result = MessageIterator.EMPTY;
         try (Stream<FeedService> remotes = service.getCluster().getServices(remote -> !Objects.equals(service.getServerId(), remote.getServerId()))) {
             for (FeedService remote : (Iterable<FeedService>)remotes::iterator) {
-                MessageIterator.Peekable remoteResult = remote.search(getName(), from, fromInclusive, to, toInclusive, serverId, false, filters).peekable();
+                MessageIterator.Peekable remoteResult = remote.search(getName(), serverId, from, fromInclusive, to, toInclusive, Optional.of(false), filters).peekable();
                 Instant remoteFrom = remoteResult.peek().map(message->message.getTimestamp()).orElse(Instant.MAX);
                 LOG.debug("Relay search found messages between {} and {} on serverId {}", from, to, remote.getServerId());
-                if (toInclusive && !remoteFrom.isAfter(to) || remoteFrom.isBefore(to)) {
+                if (to.isPresent() && (toInclusive.orElse(true) && !remoteFrom.isAfter(to.get()) || remoteFrom.isBefore(to.get()))) {
                     result = MessageIterator.of(remoteResult, result);
-                    to = remoteFrom;
-                    toInclusive = false;
+                    to = Optional.of(remoteFrom);
+                    toInclusive = Optional.of(false);
                 }
             }
         }

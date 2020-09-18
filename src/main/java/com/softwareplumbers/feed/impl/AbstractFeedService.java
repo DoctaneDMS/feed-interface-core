@@ -201,19 +201,10 @@ public abstract class AbstractFeedService implements FeedService {
         return LOG.exit(getFeed(path).listen(this, from, serverId, filters));
     }
     
-
-
     @Override
-    public MessageIterator search(FeedPath path, Instant from, UUID serverId, boolean relay, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
-        LOG.entry(path, from, serverId);
-        return LOG.exit(getFeed(path).search(this, from, serverId, relay, filters));
-
-    }
-    
-    @Override
-    public MessageIterator search(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, boolean relay, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
+    public MessageIterator search(FeedPath path, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Optional<Boolean> relay, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
         LOG.entry(path, from, fromInclusive, to, toInclusive, serverId);
-        return LOG.exit(getFeed(path).search(this, from, fromInclusive, to, toInclusive, serverId, relay, filters));
+        return LOG.exit(getFeed(path).search(this, serverId, from, fromInclusive, to, toInclusive, relay, filters));
     }
             
     @Override

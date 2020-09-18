@@ -8,6 +8,7 @@ package com.softwareplumbers.feed;
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
@@ -100,7 +101,9 @@ public interface FeedService {
      * @return A MessageIterator WHICH MUST BE CLOSED.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    MessageIterator search(FeedPath path, Instant from, UUID serverId, boolean relay, Predicate<Message>... filters) throws InvalidPath;
+    default MessageIterator search(FeedPath path, UUID serverId, Instant from, Optional<Boolean> relay, Predicate<Message>... filters) throws InvalidPath {
+        return search(path, serverId, from, false, Optional.empty(), Optional.empty(), Optional.of(true), filters);
+    }
     
     /** Get messages synchronously.
      * 
@@ -113,8 +116,8 @@ public interface FeedService {
      * @return A MessageIterator WHICH MUST BE CLOSED.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    default MessageIterator search(FeedPath path, Instant from, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
-        return search(path, from, serverId, true, filters);
+    default MessageIterator search(FeedPath path, UUID serverId, Instant from, Predicate<Message>... filters) throws InvalidPath {
+        return search(path, serverId, from, false, Optional.empty(), Optional.empty(), Optional.of(true), filters);
     }
     
     /** Get messages synchronously.
@@ -136,7 +139,7 @@ public interface FeedService {
      * @return A MessageIterator WHICH MUST BE CLOSED.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    MessageIterator search(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, boolean relay, Predicate<Message>... filters) throws InvalidPath;
+    MessageIterator search(FeedPath path, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Optional<Boolean> relay, Predicate<Message>... filters) throws InvalidPath;
 
     /** Get messages synchronously.
      * 
@@ -152,8 +155,8 @@ public interface FeedService {
      * @return A MessageIterator WHICH MUST BE CLOSED.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    default MessageIterator search(FeedPath path, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) throws InvalidPath {
-        return search(path, from, fromInclusive, to, toInclusive, serverId, true, filters);
+    default MessageIterator search(FeedPath path, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive,  Predicate<Message>... filters) throws InvalidPath {
+        return search(path, serverId, from, fromInclusive, to, toInclusive, Optional.of(true), filters);
     }
     
     /** Sent a message to a feed.

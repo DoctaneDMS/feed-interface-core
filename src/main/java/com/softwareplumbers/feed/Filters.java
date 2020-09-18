@@ -8,6 +8,7 @@ package com.softwareplumbers.feed;
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
 
@@ -43,10 +44,10 @@ public class Filters {
     public class ByRemoteTimestamp implements Predicate<Message> {
         public final UUID serverId;
         public final Instant from;
-        public final Instant to;
+        public final Optional<Instant> to;
         public final Instant initTime;
         
-        public ByRemoteTimestamp(UUID serverId, Instant from, Instant to) {
+        public ByRemoteTimestamp(UUID serverId, Instant from, Optional<Instant> to) {
             this.serverId = serverId;
             this.from = from;
             this.to = to;
@@ -79,13 +80,13 @@ public class Filters {
                     throw FeedExceptions.runtime(e);
                 }
             }
-            return timestamp.isAfter(from) && !to.isBefore(timestamp);
+            return timestamp.isAfter(from) && (!to.isPresent() || !to.get().isBefore(timestamp));
         };        
     }
     
     public static Filters using(FeedService service) { return new Filters(service); }
     
-    public Predicate<Message> byRemoteTimestamp(UUID serverId, Instant from, Instant to) {
+    public Predicate<Message> byRemoteTimestamp(UUID serverId, Instant from, Optional<Instant> to) {
         return new ByRemoteTimestamp(serverId, from, to);
     } 
 }

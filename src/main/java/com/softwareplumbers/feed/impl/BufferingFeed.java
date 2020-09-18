@@ -12,6 +12,7 @@ import com.softwareplumbers.feed.impl.buffer.MessageBuffer;
 import java.io.PrintWriter;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -50,16 +51,6 @@ public class BufferingFeed extends AbstractFeed {
         return buffer.addMessages(messages);
     }
            
-    @Override
-    public MessageIterator search(FeedService service, Instant from, UUID serverId, boolean relay, Predicate<Message>... filters) {
-        LOG.entry(getName(), service, from, serverId, relay, filters);
-        if (!getChildren().findAny().isPresent()) {
-            return LOG.exit(search(service, from, false, Instant.MAX, true, serverId, relay, filters));
-        } else {
-            return LOG.exit(search(service, from, false, checkpoint(), true, serverId, relay, filters));
-        }
-    }
-    
     private Instant checkpoint() {
         return Stream.concat(Stream.of(
                 buffer.checkpoint()), 
@@ -75,8 +66,9 @@ public class BufferingFeed extends AbstractFeed {
     }
     
     @Override
-    public MessageIterator localSearch(FeedService svc, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, Predicate<Message>... filters) {
-            return buffer.getMessagesBetween(from, fromInclusive, to, toInclusive, filters);        
+    public MessageIterator localSearch(FeedService svc, Instant from, boolean fromInclusive, Optional<Instant> maybeTo, Optional<Boolean> toInclusive, Predicate<Message>... filters) {
+        Instant to = maybeTo.orElseGet(()->getChildren().findAny().isPresent() ? checkpoint() : Instant.MAX);
+        return buffer.getMessagesBetween(from, fromInclusive, to, toInclusive.orElse(true), filters);        
     }
     
     @Override

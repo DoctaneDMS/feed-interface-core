@@ -7,6 +7,7 @@ package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
@@ -80,27 +81,23 @@ public interface Feed {
         }          
     }
     
-    default MessageIterator search(FeedService service, Instant from, UUID serverId, boolean relay, Predicate<Message>... filters) {
-        try {
-            return service.search(getName(), from, serverId, relay, filters);
-        } catch (FeedExceptions.InvalidPath e) {
-            throw new FeedExceptions.BaseRuntimeException(e);
-        }                  
+    default MessageIterator search(FeedService service, UUID serverId, Instant from, Optional<Boolean> relay, Predicate<Message>... filters) {
+        return search(service, serverId, from, false, Optional.empty(), Optional.empty(), relay, filters);
     }
     
-    default MessageIterator search(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
-        return search(service, from, serverId, true, filters);
+    default MessageIterator search(FeedService service, UUID serverId, Instant from, Predicate<Message>... filters) {
+        return search(service, serverId, from, Optional.of(true), filters);
     }
     
-    default MessageIterator search(FeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, boolean relay, Predicate<Message>... filters) {
+    default MessageIterator search(FeedService service, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Optional<Boolean> relay, Predicate<Message>... filters) {
         try {
-            return service.search(getName(), from, fromInclusive, to, toInclusive, serverId, relay, filters);
+            return service.search(getName(), serverId, from, fromInclusive, to, toInclusive, relay, filters);
         } catch (FeedExceptions.InvalidPath e) {
             throw new FeedExceptions.BaseRuntimeException(e);
         }                  
     }    
     
-    default MessageIterator search(FeedService service, Instant from, boolean fromInclusive, Instant to, boolean toInclusive, UUID serverId, Predicate<Message>... filters) {
-        return search(service, from, fromInclusive, to, toInclusive, serverId, true, filters);
+    default MessageIterator search(FeedService service, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Predicate<Message>... filters) {
+        return search(service, serverId, from, fromInclusive, to, toInclusive, Optional.of(true), filters);
     }
 }
