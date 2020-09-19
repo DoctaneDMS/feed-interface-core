@@ -272,7 +272,7 @@ public class MessageImpl implements Message {
         if (supplier.isPersistent())
             return "MessageImpl[" + getAllHeaders() + "]";
         else
-            return "MessageImpl[" + getHeaders() + "]";
+            return "MessageImpl[" + getName() + " ," + getTimestamp() + ", ...]";
     }
     
     public static MessageImpl acknowledgement(Message message) {
