@@ -175,16 +175,17 @@ public class TestUtils {
         ArrayList<Message> results = new ArrayList<>(count);
         try {
             while (count > 0) {
-                MessageIterator messages = service.listen(path, from, service.getServerId(), Filters.NO_ACKS).get(5, TimeUnit.SECONDS);
-                Message current = null;
-                while (messages.hasNext()) {
-                    current = messages.next();
-                    results.add(current);
-                    LOG.debug("receiver {} munched: {} - {}", id, current.getName(), current.getTimestamp());
-                    count--;                
+                try (MessageIterator messages = service.listen(path, from, service.getServerId(), Filters.NO_ACKS).get(5, TimeUnit.SECONDS)) {
+                    Message current = null;
+                    while (messages.hasNext()) {
+                        current = messages.next();
+                        results.add(current);
+                        LOG.debug("receiver {} munched: {} - {}", id, current.getName(), current.getTimestamp());
+                        count--;                
+                    }
+                    LOG.debug("receiver {} end batch", id);
+                    if (current != null) from = current.getTimestamp();
                 }
-                LOG.debug("receiver {} end batch", id);
-                if (current != null) from = current.getTimestamp();
             }
             LOG.debug("receiver {} complete", id);
         } catch (TimeoutException | InterruptedException | InvalidPath | ExecutionException e) {
@@ -199,15 +200,16 @@ public class TestUtils {
     
     public static void createReceiver(int id, MessageBuffer buffer, int count, Instant from, Map<FeedPath,Message> results) {
         while (count > 0) {
-            MessageIterator messages = buffer.getMessagesAfter(from, Filters.NO_ACKS);
-            Message current = null;
-            while (messages.hasNext()) {
-                current = messages.next();
-                results.put(current.getName(), current);
-                LOG.debug("receiver {} munched: {} - {}", id, current.getName(), current.getTimestamp());
-                count--;                
+            try (MessageIterator messages = buffer.getMessagesAfter(from, Filters.NO_ACKS)) {
+                Message current = null;
+                while (messages.hasNext()) {
+                    current = messages.next();
+                    results.put(current.getName(), current);
+                    LOG.debug("receiver {} munched: {} - {}", id, current.getName(), current.getTimestamp());
+                    count--;                
+                }
+                if (current != null) from = current.getTimestamp();
             }
-            if (current != null) from = current.getTimestamp();
         }
     }
     
@@ -311,14 +313,15 @@ public class TestUtils {
     }
     
     public static void assertNoMore(FeedService node, Feed feed, Message last) {
-        MessageIterator more = feed.search(node, last.getServerId().get(), last.getTimestamp(), Filters.NO_ACKS);
-        if (more.hasNext()) {
-            int count = 0;
-            while (more.hasNext()) {
-                System.err.println("Extra message: " + more.next());
-                count++;
+        try (MessageIterator more = feed.search(node, last.getServerId().get(), last.getTimestamp(), Filters.NO_ACKS)) {
+            if (more.hasNext()) {
+                int count = 0;
+                while (more.hasNext()) {
+                    System.err.println("Extra message: " + more.next());
+                    count++;
+                }
+                fail(count + " extra messages for " + feed.getName());
             }
-            fail(count + " extra messages for " + feed.getName());
         }
     }
     
