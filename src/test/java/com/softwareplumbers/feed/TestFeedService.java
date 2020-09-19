@@ -129,7 +129,7 @@ public class TestFeedService {
         List<FeedPath> feeds = getFeeds();
         // 8 receivers split across 4 feeds, each should receive all the messages sent to a single feed.
         try {
-            List<Receiver> receivers = createReceivers(8, service, feeds, start, 40).get(20, TimeUnit.SECONDS);
+            List<Receiver> receivers = createReceivers(8, service, feeds, start, 40).get(60, TimeUnit.SECONDS);
 
             assertThat(receivers.size(), equalTo(8));  
             
