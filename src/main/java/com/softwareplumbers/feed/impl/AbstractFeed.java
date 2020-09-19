@@ -158,6 +158,7 @@ public abstract class AbstractFeed implements Feed {
                                 } else {
                                     // This shouldn't happen, but... belt and braces.
                                     LOG.warn("No messages, resubmitting callback {}", callback);
+                                    messages.close();
                                     synchronized(this) {
                                         callbacks.computeIfAbsent(entryTimestamp, key -> new LinkedList()).add(callback);
                                     }
@@ -189,6 +190,7 @@ public abstract class AbstractFeed implements Feed {
             LOG.debug("Found results, returning immediately");
             return LOG.exit(CompletableFuture.completedFuture(results));
         } else {
+            results.close();
             Callback result = new Callback(filters);
             synchronized(this) {
                 callbacks.computeIfAbsent(from, key -> new LinkedList()).add(result);
@@ -204,6 +206,7 @@ public abstract class AbstractFeed implements Feed {
             LOG.debug("Found results, returning immediately");
             return LOG.exit(CompletableFuture.completedFuture(results));
         } else {
+            results.close();
             Callback result = new Callback(Filters.POSTED_LOCALLY);
             synchronized(this) {
                 callbacks.computeIfAbsent(from, key -> new LinkedList()).add(result);
@@ -251,6 +254,7 @@ public abstract class AbstractFeed implements Feed {
                     Message first = result.next();
                     result = MessageIterator.of(relay(service, serverId, from, fromInclusive, Optional.of(first.getTimestamp()), Optional.of(false), filters), MessageIterator.of(first), result);
                 } else {
+                    result.close();
                     result = relay(service, serverId, from, fromInclusive, to, toInclusive, filters);
                 }
             } catch (FeedExceptions.InvalidPath exp) {

@@ -46,6 +46,7 @@ public abstract class AbstractFeedService implements FeedService {
             LOG.entry(messages, exception);
             if (exception != null) {
                 LOG.error("Error monitoring {}", remote.getServerId(), exception);
+                if (messages != null) messages.close();
                 lastException = Optional.of(exception);
                 errorCount++;
             } else {
@@ -56,6 +57,7 @@ public abstract class AbstractFeedService implements FeedService {
                         receivedCount++;
                         replicate(message);
                     }
+                    messages.close();
                     remote.watch(getServerId(), message.getTimestamp()).whenCompleteAsync(this::monitorCallback, callbackExecutor);
                 } catch (Exception exp) {
                     LOG.error("Error monitoring {}", remote.getServerId());

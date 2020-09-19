@@ -185,14 +185,13 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
     private static class Merge extends MessageIterator {
         private final Peekable[] merged;
         
-        @Override
-        public void close() {
-            for (Peekable source : merged) source.close();
+        public Merge(Peekable... sources) {
+            super(()->Stream.of(sources).forEach(MessageIterator::close));
+            merged = sources;
         }
         
         public Merge(Stream<MessageIterator> sources) {
-            super(()->{});
-            merged = sources.map(MessageIterator::peekable).toArray(Peekable[]::new);
+            this(sources.map(MessageIterator::peekable).toArray(Peekable[]::new));
         }
         
         @Override
