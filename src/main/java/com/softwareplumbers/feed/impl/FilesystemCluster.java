@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -35,7 +36,8 @@ public abstract class FilesystemCluster extends CachingCluster {
     static final Pattern FILENAME_MATCH_TEMPLATE = Pattern.compile("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}");
     private final Path clusterDir;
     
-    public FilesystemCluster(Path clusterDir) throws IOException {
+    public FilesystemCluster(ExecutorService executor, Path clusterDir) throws IOException {
+        super(executor);
         this.clusterDir = clusterDir;
         Files.createDirectories(clusterDir);
     }

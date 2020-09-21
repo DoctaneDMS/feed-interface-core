@@ -37,70 +37,8 @@ public abstract class AbstractFeedService implements FeedService {
     
     private static final XLogger LOG = XLoggerFactory.getXLogger(AbstractFeedService.class);
     
-    private class Remote {
-        
-        private final FeedService remote;
-        private Optional<Throwable> lastException = Optional.empty();
-        private long receivedCount = 0;
-        private long errorCount = 0;
-        private boolean closed;
-        private long timeoutMillis = 10000;
-        
-        private void monitorCallback(MessageIterator messages, Throwable exception) {
-            LOG.entry(messages, exception);
-            if (exception != null) {
-                LOG.error("Error monitoring {}", remote.getServerId(), exception);
-                if (messages != null) messages.close();
-                lastException = Optional.of(exception);
-                errorCount++;
-            } else {
-                Message message = null;
-                try {
-                    while (messages.hasNext()) {
-                        message = messages.next();
-                        receivedCount++;
-                        replicate(message);
-                    }
-                    messages.close();
-                    if (!closed) remote.watch(getServerId(), message.getTimestamp(), timeoutMillis).whenCompleteAsync(this::monitorCallback, callbackExecutor);
-                } catch (Exception exp) {
-                    LOG.error("Error monitoring {}", remote.getServerId());
-                    lastException = Optional.of(exp);
-                    errorCount++;
-                }
-            }
-            LOG.exit();
-        }
-
-        public Remote(FeedService remote) {
-            LOG.entry(remote);
-            this.remote = remote;
-            this.closed = false;
-            LOG.exit();
-        }    
-        
-        public void close() {
-            closed = true;
-        }
-        
-        public void startMonitor() {
-            remote.watch(getServerId(), initTime, timeoutMillis).whenComplete(this::monitorCallback);            
-        }
-        
-        public void dumpState(PrintWriter out) {
-            out.println(String.format(
-                "Remote: %s, received: %d, errors: %d, last error: %s", 
-                remote.getServerId(), 
-                receivedCount, 
-                errorCount, 
-                lastException.map(t->t.getMessage()).orElse("none")
-            ));
-        }        
-    }    
-
     private final ScheduledExecutorService callbackExecutor;
     protected final UUID serverId;
-    private final Map<UUID, Remote> remotes = new ConcurrentHashMap<>();
     protected Cluster cluster;
     protected final Instant initTime;
     private final AbstractFeed rootFeed;
@@ -124,28 +62,16 @@ public abstract class AbstractFeedService implements FeedService {
         LOG.entry(cluster);
         LOG.debug("Initializing feed service {}", this);
         this.cluster = cluster;
-        cluster.getServices(Cluster.Filters.idIsNot(serverId))
-            .forEach(this::monitor);
         LOG.exit();
     }
     
     @Override
     public void close() {
         LOG.entry();
-        remotes.values().forEach(Remote::close);
-        remotes.clear();
         cluster.deregister(this);
         LOG.exit();
     }
-    
-    @Override
-    public void monitor(FeedService remoteService) {
-        LOG.entry(remoteService);
-        LOG.debug("Service {} will monitor {}", this, remoteService);
-        remotes.computeIfAbsent(remoteService.getServerId(), uuid->new Remote(remoteService)).startMonitor();
-        LOG.exit();
-    }
-    
+        
     void callback(Runnable callback) {
         LOG.entry(callback);
         callbackExecutor.submit(callback);
@@ -171,11 +97,6 @@ public abstract class AbstractFeedService implements FeedService {
     @Override
     public Stream<Feed> getFeeds() {
         return rootFeed.getDescendents().map(Feed.class::cast);
-    }
-
-    public void dumpState(PrintWriter out) throws IOException {
-        remotes.values().forEach(remote->remote.dumpState(out));
-        getFeeds().forEachOrdered(feed->((AbstractFeed)feed).dumpState(out));
     }
     
     @Override
@@ -248,5 +169,9 @@ public abstract class AbstractFeedService implements FeedService {
     @Override
     public String toString() {
         return "FeedService[" + getServerId() + "]";
+    }
+    
+    public void dumpState(PrintWriter out) {
+        getFeeds().forEachOrdered(feed->((AbstractFeed)feed).dumpState(out));        
     }
 }

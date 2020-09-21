@@ -7,12 +7,17 @@ package com.softwareplumbers.feed.impl;
 
 import com.softwareplumbers.feed.Cluster;
 import com.softwareplumbers.feed.FeedService;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.URI;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -33,6 +38,12 @@ public abstract class CachingCluster implements Cluster {
     private final Map<UUID,RegistryElement> cache = new ConcurrentHashMap<>();
     private Instant expiry = Instant.EPOCH;
     private final Object expiryUpdateLock = new Object();
+    private final Set<Replicator> remotes = new HashSet<>();
+    private final ExecutorService executor;
+    
+    public CachingCluster(ExecutorService executor) {
+        this.executor = executor;
+    }
     
     public static class RegistryElement {
         public final UUID serviceId;
@@ -121,6 +132,18 @@ public abstract class CachingCluster implements Cluster {
         );
     }
     
+    public void replicate(FeedService to, FeedService from) {
+        LOG.entry(to, from);
+        LOG.debug("Service {} will replicate data from {}", to, from);
+        Replicator replicator = new Replicator(executor, to, from);
+        synchronized(this) {
+            if (remotes.add(replicator)) {
+                replicator.startMonitor();
+            }
+        }
+        LOG.exit();
+    }    
+    
     @Override
     public void register(FeedService service, URI endpoint) {
         LOG.entry(service, endpoint);
@@ -131,7 +154,10 @@ public abstract class CachingCluster implements Cluster {
                 RegistryElement entry = new RegistryElement(serverId, endpoint, service);
                 cache.put(serverId, entry);
                 save(entry);
-                getServices(Filters.idIsNot(service.getServerId())).forEach(existing->existing.monitor(service));
+                getServices(Cluster.Filters.idIsNot(serverId)).forEach(other->{
+                     replicate(service, other);
+                     replicate(other, service);
+                });
             } catch (Exception ex) {
                 LOG.error("Error registering feed service in cluster", ex);
                 throw LOG.throwing(new RuntimeException(ex));
@@ -145,11 +171,16 @@ public abstract class CachingCluster implements Cluster {
         LOG.entry(service);
         UUID serverId = service.getServerId();
         synchronized(this) {
+            remotes.removeIf(replicator->replicator.getFrom().getServerId().equals(serverId) || replicator.getTo().getServerId().equals(serverId));
             cache.remove(serverId);
             remove(serverId);            
         }
         LOG.exit();
     }
+    
+    public void dumpState(PrintWriter out) throws IOException {
+        remotes.forEach(remote->remote.dumpState(out));
+    }    
     
     public abstract FeedService getRemote(URI endpoint);
     public abstract RegistryElement fetch(UUID id);

@@ -13,6 +13,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.Executors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,7 +38,7 @@ public class LocalConfig {
     @Bean
     @Scope("singleton")
     Cluster testSimpleCluster() throws IOException {        
-        return new FilesystemCluster(Paths.get(env.getProperty("installation.root")).resolve("cluster")) {
+        return new FilesystemCluster(Executors.newFixedThreadPool(4), Paths.get(env.getProperty("installation.root")).resolve("cluster")) {
             @Override
             public FeedService getRemote(URI endpoint) {
                 throw new UnsupportedOperationException("Test cluster is local only"); 
