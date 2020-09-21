@@ -22,7 +22,7 @@ import java.util.stream.Stream;
  *
  * @author Jonathan Essex.
  */
-public interface FeedService {  
+public interface FeedService extends AutoCloseable {  
     
     /** Listen for all messages on a feed after the given instant.
      * 

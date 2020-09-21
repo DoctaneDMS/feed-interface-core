@@ -28,6 +28,14 @@ compileTestJava {
     options.compilerArgs = [ "-Xlint:deprecation" ]
 }
 
+test {
+    systemProperties = System.properties
+    systemProperty "installation.root", propValue("installFolder", "/var/tmp/test/files")
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+}
+
 javadoc {
     source = sourceSets.main.allJava
     classpath = configurations.compile

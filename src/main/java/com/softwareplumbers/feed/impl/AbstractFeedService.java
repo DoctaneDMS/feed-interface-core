@@ -41,6 +41,7 @@ public abstract class AbstractFeedService implements FeedService {
         private Optional<Throwable> lastException = Optional.empty();
         private long receivedCount = 0;
         private long errorCount = 0;
+        private boolean closed;
         
         private void monitorCallback(MessageIterator messages, Throwable exception) {
             LOG.entry(messages, exception);
@@ -58,7 +59,7 @@ public abstract class AbstractFeedService implements FeedService {
                         replicate(message);
                     }
                     messages.close();
-                    remote.watch(getServerId(), message.getTimestamp()).whenCompleteAsync(this::monitorCallback, callbackExecutor);
+                    if (!closed) remote.watch(getServerId(), message.getTimestamp()).whenCompleteAsync(this::monitorCallback, callbackExecutor);
                 } catch (Exception exp) {
                     LOG.error("Error monitoring {}", remote.getServerId());
                     lastException = Optional.of(exp);
@@ -71,8 +72,13 @@ public abstract class AbstractFeedService implements FeedService {
         public Remote(FeedService remote) {
             LOG.entry(remote);
             this.remote = remote;
+            this.closed = false;
             LOG.exit();
         }    
+        
+        public void close() {
+            closed = true;
+        }
         
         public void startMonitor() {
             remote.watch(getServerId(), initTime).whenComplete(this::monitorCallback);            
@@ -113,16 +119,28 @@ public abstract class AbstractFeedService implements FeedService {
     @Override
     public void initialize(Cluster cluster) {
         LOG.entry(cluster);
+        LOG.debug("Initializing feed service {}", this);
         this.cluster = cluster;
-        cluster.getServices(service->!Objects.equals(service.getServerId(), serverId))
+        cluster.getServices(Cluster.Filters.idIsNot(serverId))
             .forEach(this::monitor);
         LOG.exit();
     }
     
+    @Override
+    public void close() {
+        LOG.entry();
+        remotes.values().forEach(Remote::close);
+        remotes.clear();
+        cluster.deregister(this);
+        LOG.exit();
+    }
     
     @Override
     public void monitor(FeedService remoteService) {
+        LOG.entry(remoteService);
+        LOG.debug("Service {} will monitor {}", this, remoteService);
         remotes.computeIfAbsent(remoteService.getServerId(), uuid->new Remote(remoteService)).startMonitor();
+        LOG.exit();
     }
     
     void callback(Runnable callback) {
@@ -161,6 +179,7 @@ public abstract class AbstractFeedService implements FeedService {
     @Override
     public CompletableFuture<MessageIterator> watch(UUID serverId, Instant from) {
         LOG.entry(serverId);
+        LOG.trace("{} is being watched by {}", this.serverId, serverId);
         return LOG.exit(rootFeed.watch(this, from));
     }    
     
@@ -216,4 +235,9 @@ public abstract class AbstractFeedService implements FeedService {
         String id = path.part.getId().orElseThrow(()->new FeedExceptions.InvalidId(path.parent, path.part.toString()));
         return LOG.exit(getFeed(path.parent).search(this, id, filters));
     }  
+    
+    @Override
+    public String toString() {
+        return "FeedService[" + getServerId() + "]";
+    }
 }
