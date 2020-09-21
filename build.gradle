@@ -31,6 +31,8 @@ compileTestJava {
 test {
     systemProperties = System.properties
     systemProperty "installation.root", propValue("installFolder", "/var/tmp/test/files")
+    systemProperty "test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", 500
+    systemProperty "test.TestCluster.testMessageRoundtripSingleThread.SEND_COUNT", 500
     testLogging {
         events "passed", "skipped", "failed"
     }

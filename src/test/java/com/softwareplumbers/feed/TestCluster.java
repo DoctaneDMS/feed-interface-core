@@ -40,6 +40,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.env.Environment;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.ContextConfiguration;
@@ -60,6 +61,9 @@ public class TestCluster {
     @Autowired @Qualifier(value="testSimpleClusterNodeB")
     protected FeedService nodeB;
     
+    @Autowired
+    protected Environment env;
+    
     public static Message post(FeedService service, Feed feed, Message message) {
         Message ack = feed.post(service, message); 
         return message.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get()); 
@@ -72,7 +76,7 @@ public class TestCluster {
         Thread.sleep(10);
         Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
         Feed feedA = nodeA.getFeed(path);
-        final int SEND_COUNT = 500;
+        final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripSingleThread.SEND_COUNT", Integer.class);
         generateMessages(SEND_COUNT, 2, path, message->post(nodeA, feedA, message)).forEach(message->sentMessages.add(message));
         assertThat(sentMessages.size(), equalTo(SEND_COUNT));
         Stream<Message> responseMessages = TestUtils.createReceiver(0, nodeB, SEND_COUNT, path, start);
@@ -87,7 +91,7 @@ public class TestCluster {
         Thread.sleep(10);
         Feed feedA = nodeA.getFeed(path);
         Feed feedB = nodeB.getFeed(path);
-        final int SEND_COUNT = 500;
+        final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", Integer.class);
         CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
         CompletableFuture<Stream<Message>> sentToB = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeB, feedB, message));
         CompletableFuture<List<Receiver>> responseMessagesA = TestUtils.createReceivers(1, nodeA, listOfPaths, start, SEND_COUNT * 2);
