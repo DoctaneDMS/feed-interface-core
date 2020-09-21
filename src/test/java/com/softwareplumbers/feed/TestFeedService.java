@@ -97,7 +97,7 @@ public class TestFeedService {
         };
           
         FeedPath feed = randomFeedPath();
-        CompletableFuture<MessageIterator> result = service.listen(feed, Instant.now(), service.getServerId());
+        CompletableFuture<MessageIterator> result = service.listen(feed, Instant.now(), service.getServerId(), 10000L);
         result.thenAccept(callback);
         result.cancel(true);
         post(generateMessage(feed));
@@ -141,7 +141,19 @@ public class TestFeedService {
         } catch(TimeoutException exp) {
             dumpThreads();
             fail("timed out");
-        }
- 
+        } 
     }
+    
+    
+    @Test
+    public void testListenerTimeout() throws IOException, InvalidPath, InterruptedException, ExecutionException, TimeoutException {
+        FeedPath path = randomFeedPath();
+        Instant start = Instant.now();
+        Thread.sleep(10);
+        try (MessageIterator messages = service.listen(path, Instant.now(), service.getServerId(), 1000).get(5000, TimeUnit.MILLISECONDS)) {
+            // Basically this should time out after 1000 milliseconds rather than waiting for the future to timeout at 5000 milliseconds.
+            // we should get an empty iterator rather than a TimeoutException
+            assertThat(messages.hasNext(), equalTo(false));
+        }
+    }    
 }

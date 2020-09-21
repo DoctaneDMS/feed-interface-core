@@ -34,9 +34,9 @@ public interface Feed {
      * @param serverId Server at which the from timestamp was retrieved
      * @return Future which will complete when messages are received
      */
-    default CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId, Predicate<Message>... filters) {
+    default CompletableFuture<MessageIterator> listen(FeedService service, Instant from, UUID serverId, long timeoutMillis, Predicate<Message>... filters) {
         try {
-            return service.listen(getName(), from, serverId, filters);
+            return service.listen(getName(), from, serverId, timeoutMillis, filters);
         } catch (FeedExceptions.InvalidPath e) {
             throw new FeedExceptions.BaseRuntimeException(e);
         }

@@ -1,4 +1,12 @@
 /*
+
+
+
+
+
+
+
+
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
@@ -36,19 +44,18 @@ public interface FeedService extends AutoCloseable {
      * @return Future which will be completed when at least one matching message arrives.
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
-    CompletableFuture<MessageIterator> listen(FeedPath path, Instant after, UUID serverId, Predicate<Message>... filters) throws InvalidPath;
+    CompletableFuture<MessageIterator> listen(FeedPath path, Instant after, UUID serverId, long timeoutMillis, Predicate<Message>... filters) throws InvalidPath;
     
     
     /** Watch for messages on a feed posted to this server after the given instant.
      * 
-     * Watch is used by remote servers to retrieve messages posted to this server. If we are not already 
-     * watching watcherServerId, we will watch it back.
+     * Watch is used by remote servers to retrieve messages posted to this server. 
      * 
      * @param watcherServerId ServerId of watching server
      * @param after instant from which to fetch results
      * @return Future which will be completed when at least one matching message arrives.
      */
-    CompletableFuture<MessageIterator> watch(UUID watcherServerId, Instant after);
+    CompletableFuture<MessageIterator> watch(UUID watcherServerId, Instant after, long timeoutMillis);
        
     /** Provides cluster details to the feed service.
      * 

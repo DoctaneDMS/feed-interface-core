@@ -22,6 +22,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.slf4j.ext.XLogger;
@@ -42,6 +44,7 @@ public abstract class AbstractFeedService implements FeedService {
         private long receivedCount = 0;
         private long errorCount = 0;
         private boolean closed;
+        private long timeoutMillis = 10000;
         
         private void monitorCallback(MessageIterator messages, Throwable exception) {
             LOG.entry(messages, exception);
@@ -59,7 +62,7 @@ public abstract class AbstractFeedService implements FeedService {
                         replicate(message);
                     }
                     messages.close();
-                    if (!closed) remote.watch(getServerId(), message.getTimestamp()).whenCompleteAsync(this::monitorCallback, callbackExecutor);
+                    if (!closed) remote.watch(getServerId(), message.getTimestamp(), timeoutMillis).whenCompleteAsync(this::monitorCallback, callbackExecutor);
                 } catch (Exception exp) {
                     LOG.error("Error monitoring {}", remote.getServerId());
                     lastException = Optional.of(exp);
@@ -81,7 +84,7 @@ public abstract class AbstractFeedService implements FeedService {
         }
         
         public void startMonitor() {
-            remote.watch(getServerId(), initTime).whenComplete(this::monitorCallback);            
+            remote.watch(getServerId(), initTime, timeoutMillis).whenComplete(this::monitorCallback);            
         }
         
         public void dumpState(PrintWriter out) {
@@ -95,7 +98,7 @@ public abstract class AbstractFeedService implements FeedService {
         }        
     }    
 
-    private final ExecutorService callbackExecutor;
+    private final ScheduledExecutorService callbackExecutor;
     protected final UUID serverId;
     private final Map<UUID, Remote> remotes = new ConcurrentHashMap<>();
     protected Cluster cluster;
@@ -103,7 +106,7 @@ public abstract class AbstractFeedService implements FeedService {
     private final AbstractFeed rootFeed;
     private final long ackTimeout = 600; // 10 minutes
 
-    public AbstractFeedService(UUID serverId, ExecutorService callbackExecutor, Instant initTime, AbstractFeed rootFeed) {
+    public AbstractFeedService(UUID serverId, ScheduledExecutorService callbackExecutor, Instant initTime, AbstractFeed rootFeed) {
         this.callbackExecutor = callbackExecutor;
         this.serverId = serverId;
         this.cluster = Cluster.local(this);
@@ -147,7 +150,13 @@ public abstract class AbstractFeedService implements FeedService {
         LOG.entry(callback);
         callbackExecutor.submit(callback);
         LOG.exit();
-    }    
+    }  
+    
+    void schedule(Runnable callback, long delayMillis) {
+        LOG.entry(callback, delayMillis);
+        callbackExecutor.schedule(callback, delayMillis, TimeUnit.MILLISECONDS);
+        LOG.exit();        
+    }
     
     @Override
     public Cluster getCluster() {
@@ -177,10 +186,10 @@ public abstract class AbstractFeedService implements FeedService {
     public abstract AbstractFeed createFeed(AbstractFeed parent, String name);
     
     @Override
-    public CompletableFuture<MessageIterator> watch(UUID serverId, Instant from) {
+    public CompletableFuture<MessageIterator> watch(UUID serverId, Instant from, long timeoutMillis) {
         LOG.entry(serverId);
         LOG.trace("{} is being watched by {}", this.serverId, serverId);
-        return LOG.exit(rootFeed.watch(this, from));
+        return LOG.exit(rootFeed.watch(this, from, timeoutMillis));
     }    
     
         
@@ -217,9 +226,9 @@ public abstract class AbstractFeedService implements FeedService {
     }
 
     @Override
-    public CompletableFuture<MessageIterator> listen(FeedPath path, Instant from, UUID serverId, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
+    public CompletableFuture<MessageIterator> listen(FeedPath path, Instant from, UUID serverId, long timeoutMillis, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
         LOG.entry(path, from);
-        return LOG.exit(getFeed(path).listen(this, from, serverId, filters));
+        return LOG.exit(getFeed(path).listen(this, from, serverId, timeoutMillis, filters));
     }
     
     @Override

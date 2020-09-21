@@ -175,7 +175,7 @@ public class TestUtils {
         ArrayList<Message> results = new ArrayList<>(count);
         try {
             while (count > 0) {
-                try (MessageIterator messages = service.listen(path, from, service.getServerId(), Filters.NO_ACKS).get(5, TimeUnit.SECONDS)) {
+                try (MessageIterator messages = service.listen(path, from, service.getServerId(), 2000L, Filters.NO_ACKS).get(5, TimeUnit.SECONDS)) {
                     Message current = null;
                     while (messages.hasNext()) {
                         current = messages.next();

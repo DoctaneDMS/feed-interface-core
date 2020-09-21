@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Predicate;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
@@ -47,7 +48,7 @@ public abstract class BufferingFeedService extends AbstractFeedService {
      * @param bufferPool Pool of memory used to create message buffers
      * @param bucketSize Size of a bucket - should be larger than the expected maximum message size
      */
-    public BufferingFeedService(UUID serverId, ExecutorService callbackExecutor, MessageClock clock, BufferPool bufferPool, int bucketSize) {
+    public BufferingFeedService(UUID serverId, ScheduledExecutorService callbackExecutor, MessageClock clock, BufferPool bufferPool, int bucketSize) {
         super(serverId, callbackExecutor, clock.instant(), new BufferingFeed(bufferPool.createBuffer(clock, bucketSize)));
         this.bufferPool = bufferPool;
         this.bucketSize = bucketSize; 
