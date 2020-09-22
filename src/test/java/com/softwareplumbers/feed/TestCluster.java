@@ -82,6 +82,29 @@ public class TestCluster {
         Stream<Message> responseMessages = TestUtils.createReceiver(0, nodeB, SEND_COUNT, path, start);
         TestUtils.assertMatch(sentMessages.stream(), responseMessages);
     }
+    
+    @Test
+    public void testMessageRoundtripMonodirectional() throws IOException, FeedExceptions.InvalidPath, InterruptedException, ExecutionException, TimeoutException {
+        FeedPath path = randomFeedPath();
+        List<FeedPath> listOfPaths = Collections.singletonList(path);
+        Instant start = Instant.now();
+        Thread.sleep(10);
+        Feed feedA = nodeA.getFeed(path);
+        Feed feedB = nodeB.getFeed(path);
+        final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", Integer.class);
+        CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
+        CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT);
+        CompletableFuture.allOf(responseMessagesB, sentToA).get(20, TimeUnit.SECONDS);
+        List<Message> allSent = new ArrayList<>();
+        sentToA.get().forEach(allSent::add);
+        assertThat(allSent.size(), equalTo(SEND_COUNT));
+        List<Message> allReceivedB = responseMessagesB.get().get(0).messages.collect(Collectors.toList());
+        assertThat(allReceivedB, hasSize(SEND_COUNT));
+        Message lastReceivedB = allReceivedB.get(SEND_COUNT - 1);
+        assertMatch(allSent.stream(), allReceivedB.stream());
+        Thread.sleep(100);
+        assertNoMore(nodeB, feedB, lastReceivedB);
+    }    
 
     @Test
     public void testMessageRoundtripBidirectional() throws IOException, FeedExceptions.InvalidPath, InterruptedException, ExecutionException, TimeoutException {
