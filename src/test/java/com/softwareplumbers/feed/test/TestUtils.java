@@ -173,9 +173,10 @@ public class TestUtils {
     
     public static Stream<Message> createReceiver(int id, FeedService service, int count, FeedPath path, Instant from) {
         ArrayList<Message> results = new ArrayList<>(count);
+        int iterationLimit = count * 2;
         try {
-            while (count > 0) {
-                try (MessageIterator messages = service.listen(path, from, service.getServerId(), 2000L, Filters.NO_ACKS).get(5, TimeUnit.SECONDS)) {
+            while (count > 0 && iterationLimit > 0) {
+                try (MessageIterator messages = service.listen(path, from, service.getServerId(), 1000L, Filters.NO_ACKS).get(5, TimeUnit.SECONDS)) {
                     Message current = null;
                     while (messages.hasNext()) {
                         current = messages.next();
@@ -186,7 +187,9 @@ public class TestUtils {
                     LOG.debug("receiver {} end batch", id);
                     if (current != null) from = current.getTimestamp();
                 }
+                iterationLimit--;
             }
+            if (iterationLimit == 0) LOG.warn("Iteration limit exceeded");
             LOG.debug("receiver {} complete", id);
         } catch (TimeoutException | InterruptedException | InvalidPath | ExecutionException e) {
             LOG.error("Error in receiver ", e);

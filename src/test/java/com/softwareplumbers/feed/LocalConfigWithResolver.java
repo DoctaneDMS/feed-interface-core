@@ -6,15 +6,14 @@
 package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.impl.FilesystemCluster;
+import com.softwareplumbers.feed.impl.Resolver;
 import com.softwareplumbers.feed.test.DummyFeedService;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -39,34 +38,36 @@ public class LocalConfigWithResolver {
     
     @Bean
     @Scope("singleton") 
-    Map<URI, FeedService> resolverFeeds(@Qualifier("testSimpleClusterNodeA") FeedService a, @Qualifier("testSimpleClusterNodeB") FeedService b) {
-        return new HashMap<URI, FeedService>() {{
-            put(TEST_URI_A, a);
-            put(TEST_URI_B, b);
-        }};
+    Resolver<FeedService> resolverFeeds(@Qualifier("testSimpleClusterNodeA") FeedService a, @Qualifier("testSimpleClusterNodeB") FeedService b) {
+        return (uri, credentials) -> {
+            if (uri.equals(TEST_URI_A)) return Optional.of(a);
+            if (uri.equals(TEST_URI_B)) return Optional.of(b);
+            return Optional.empty();
+        };
     }
 
     @Bean
     @Scope("singleton") 
-    Map<URI, Cluster> resolverClusters(@Lazy @Qualifier("testSimpleCluster") Cluster a, @Lazy @Qualifier("remoteSimpleCluster") Cluster b) {
-        return new HashMap<URI, Cluster>() {{
-            put(TEST_URI_A, a);
-            put(TEST_URI_B, b);
-        }};
+    Resolver<Cluster> resolverClusters(@Lazy @Qualifier("testSimpleCluster") Cluster a, @Lazy @Qualifier("remoteSimpleCluster") Cluster b) {
+        return (uri, credentials) -> {
+            if (uri.equals(TEST_URI_A)) return Optional.of(a);
+            if (uri.equals(TEST_URI_B)) return Optional.of(b);
+            return Optional.empty();
+        };
     }
 
     @Bean
     @Scope("singleton")
     Cluster testSimpleCluster(
-        @Qualifier("resolverFeeds") Map<URI, FeedService> resolverFeeds, 
-        @Qualifier("resolverClusters") Map<URI, Cluster> resolverClusters,
+        @Qualifier("resolverFeeds") Resolver<FeedService> resolverFeeds, 
+        @Qualifier("resolverClusters") Resolver<Cluster> resolverClusters,
         @Qualifier("testSimpleClusterNodeA") FeedService nodeA
     ) throws IOException {        
         Cluster cluster = new FilesystemCluster(
             Executors.newFixedThreadPool(4), 
             Paths.get(env.getProperty("installation.root")).resolve("cluster"), 
-            resolverFeeds::get, 
-            resolverClusters::get
+            resolverFeeds, 
+            resolverClusters
         );
         cluster.register(nodeA, TEST_URI_A);
         return cluster;
@@ -75,15 +76,15 @@ public class LocalConfigWithResolver {
     @Bean
     @Scope("singleton")
     Cluster remoteSimpleCluster(
-        @Qualifier("resolverFeeds") Map<URI, FeedService> resolverFeeds, 
-        @Qualifier("resolverClusters") Map<URI, Cluster> resolverClusters,
+        @Qualifier("resolverFeeds") Resolver<FeedService> resolverFeeds, 
+        @Qualifier("resolverClusters") Resolver<Cluster> resolverClusters,
         @Qualifier("testSimpleClusterNodeB") FeedService nodeB
     ) throws IOException {        
         Cluster cluster = new FilesystemCluster(
             Executors.newFixedThreadPool(4), 
             Paths.get(env.getProperty("installation.root")).resolve("cluster"), 
-            resolverFeeds::get, 
-            resolverClusters::get
+            resolverFeeds, 
+            resolverClusters
         );
         cluster.register(nodeB, TEST_URI_B);
         return cluster;

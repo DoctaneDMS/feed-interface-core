@@ -110,7 +110,7 @@ public class TestCluster {
         CompletableFuture<Stream<Message>> sentToB = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeB, feedB, message));
         CompletableFuture<List<Receiver>> responseMessagesA = TestUtils.createReceivers(1, nodeA, listOfPaths, start, SEND_COUNT * 2);
         CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT * 2);
-        CompletableFuture.allOf(responseMessagesA, responseMessagesB, sentToA, sentToB).get(10, TimeUnit.SECONDS);
+        CompletableFuture.allOf(responseMessagesA, responseMessagesB, sentToA, sentToB).get(20, TimeUnit.SECONDS);
         ArrayList<Message> allSent = new ArrayList<>();
         sentToA.get().forEach(allSent::add);
         sentToB.get().forEach(allSent::add);

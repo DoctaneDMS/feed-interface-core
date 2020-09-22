@@ -6,6 +6,8 @@
 package com.softwareplumbers.feed.impl;
 
 import java.net.URI;
+import java.util.Optional;
+import javax.json.JsonObject;
 
 /** Resolve some remote object.
  *
@@ -14,5 +16,5 @@ import java.net.URI;
  */
 @FunctionalInterface
 public interface Resolver<T> {
-    T resolve(URI endpoint);   
+    Optional<T> resolve(URI endpoint, JsonObject credentials);   
 }

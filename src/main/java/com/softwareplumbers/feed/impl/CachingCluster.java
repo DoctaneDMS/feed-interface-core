@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -41,6 +42,8 @@ public abstract class CachingCluster implements Cluster {
     private final ExecutorService executor;
     private final Resolver<FeedService> feedServiceResolver;
     private final Resolver<Cluster> clusterResolver;
+    private Map<URI,JsonObject> credentials = new ConcurrentHashMap<>();
+    private JsonObject defaultCredential = JsonObject.EMPTY_JSON_OBJECT;
     
     
     public CachingCluster(ExecutorService executor, Resolver<FeedService> feedServiceResolver, Resolver<Cluster> clusterResolver) {
@@ -72,9 +75,10 @@ public abstract class CachingCluster implements Cluster {
             this.local = false;
         }
         
-        public FeedService getFeedService(Cluster cluster, Resolver<FeedService> resolver) {
+        public FeedService getFeedService(Cluster cluster, JsonObject credentials, Resolver<FeedService> resolver) {
             if (service == null) {
-                service = resolver.resolve(uri);
+                service = resolver.resolve(uri, credentials)
+                    .orElseThrow(()->new RuntimeException("Can't resovle feed service"));
                 service.setCluster(cluster);
             }
             return service;
@@ -119,12 +123,18 @@ public abstract class CachingCluster implements Cluster {
                     : value
             ))
         );
-    }   
+    }
+    
+    public JsonObject getCredential(URI service) {
+        JsonObject credential = credentials.get(service);
+        return credential == null ? defaultCredential : credential;
+        
+    }
     
     @Override
     public Optional<FeedService> getService(UUID id) {
         LOG.entry(id);
-        return LOG.exit(getNodeInfo(id).map(entry->entry.getFeedService(this, feedServiceResolver)));
+        return LOG.exit(getNodeInfo(id).map(entry->entry.getFeedService(this, getCredential(entry.uri), feedServiceResolver)));
     }    
     
     Stream<RegistryElement> getNodeInfo() {
@@ -157,7 +167,7 @@ public abstract class CachingCluster implements Cluster {
         
         return LOG.exit(
             getNodeInfo()
-                .map(entry->entry.getFeedService(this, feedServiceResolver))
+                .map(entry->entry.getFeedService(this, getCredential(entry.uri), feedServiceResolver))
                 .filter(Stream.of(filters).reduce(i->true, Predicate::and))
         );
     }
@@ -166,14 +176,16 @@ public abstract class CachingCluster implements Cluster {
         LOG.entry(to, from);
         LOG.debug("Service {} will replicate data from {}", to, from);
         if (to.isLocal()) {
-            Replicator replicator = new Replicator(executor, to.getFeedService(this, feedServiceResolver), from.getFeedService(this, feedServiceResolver));
+            Replicator replicator = new Replicator(executor, to.getFeedService(this, getCredential(to.uri), feedServiceResolver), from.getFeedService(this, getCredential(from.uri), feedServiceResolver));
             synchronized(this) {
                 if (remotes.add(replicator)) {
                     replicator.startMonitor();
                 }
             }
         } else {
-            clusterResolver.resolve(to.uri).replicate(to.serviceId, from.serviceId);
+            clusterResolver.resolve(to.uri, getCredential(to.uri))
+                .orElse(this) // in the case where URI is a distributed node
+                .replicate(to.serviceId, from.serviceId);
         }
         LOG.exit();
     }    

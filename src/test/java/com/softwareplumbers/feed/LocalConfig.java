@@ -13,6 +13,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -35,16 +36,14 @@ public class LocalConfig {
         return new DummyFeedService(100000, 2000);
     }
     
-    private static <T> T unsupportedOperation(URI uri) { throw new UnsupportedOperationException("Test cluster is local only"); }
-    
     @Bean
     @Scope("singleton")
     Cluster testSimpleCluster() throws IOException {        
         return new FilesystemCluster(
             Executors.newFixedThreadPool(4), 
             Paths.get(env.getProperty("installation.root")).resolve("cluster"), 
-            LocalConfig::unsupportedOperation, 
-            LocalConfig::unsupportedOperation
+            (uri,credentials)->Optional.empty(), 
+            (uri,credentials)->Optional.empty()
         );
     }
     
