@@ -18,7 +18,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import javax.json.Json;
@@ -40,15 +39,21 @@ public abstract class CachingCluster implements Cluster {
     private final Object expiryUpdateLock = new Object();
     private final Set<Replicator> remotes = new HashSet<>();
     private final ExecutorService executor;
+    private final Resolver<FeedService> feedServiceResolver;
+    private final Resolver<Cluster> clusterResolver;
     
-    public CachingCluster(ExecutorService executor) {
+    
+    public CachingCluster(ExecutorService executor, Resolver<FeedService> feedServiceResolver, Resolver<Cluster> clusterResolver) {
         this.executor = executor;
+        this.feedServiceResolver = feedServiceResolver;
+        this.clusterResolver = clusterResolver;
     }
     
     public static class RegistryElement {
         public final UUID serviceId;
         public final URI uri;
         public final Instant expiry;
+        public boolean local;
         public FeedService service;
         
         public RegistryElement(UUID serviceId, URI uri, FeedService service) { 
@@ -56,11 +61,21 @@ public abstract class CachingCluster implements Cluster {
             this.uri = uri; 
             this.expiry = Instant.now().plusMillis(CACHE_TTL_MILLISECOND); 
             this.service = service;
+            this.local = true;
         }
         
-        public FeedService getFeedService(Function<URI,FeedService> resolver) {
+        public RegistryElement(UUID serviceId, URI uri) {
+            this.serviceId = serviceId; 
+            this.uri = uri; 
+            this.expiry = Instant.now().plusMillis(CACHE_TTL_MILLISECOND); 
+            this.service = null;
+            this.local = false;
+        }
+        
+        public FeedService getFeedService(Cluster cluster, Resolver<FeedService> resolver) {
             if (service == null) {
-                service = resolver.apply(uri);
+                service = resolver.resolve(uri);
+                service.setCluster(cluster);
             }
             return service;
         }
@@ -68,8 +83,7 @@ public abstract class CachingCluster implements Cluster {
         public static RegistryElement fromJson(JsonObject json) {
             return new RegistryElement(
                 UUID.fromString(json.getString("serviceId")),
-                URI.create(json.getString("uri")),
-                null
+                URI.create(json.getString("uri"))
             );
         }
         
@@ -82,36 +96,45 @@ public abstract class CachingCluster implements Cluster {
             if (existing == null) return update;
             if (update == null) return null;
             update.service = existing.service;
+            update.local = existing.local;
             return update;
         }
         
+        @Override
         public String toString() {
             return String.format("RegistryEntry[expires %s,  %s]", expiry, toJson());
         }
+        
+        public boolean isLocal() {
+            return local;
+        }
     }
+    
+    public Optional<RegistryElement> getNodeInfo(UUID id) {
+        LOG.entry(id);
+        return LOG.exit(
+            Optional.ofNullable(cache.compute(id, (key,value)->
+                value == null || Instant.now().isAfter(value.expiry) 
+                    ? RegistryElement.merge(value, fetch(id))
+                    : value
+            ))
+        );
+    }   
     
     @Override
     public Optional<FeedService> getService(UUID id) {
         LOG.entry(id);
-        return LOG.exit(
-            Optional.ofNullable(cache.compute(id, (key,value)->
-                Instant.now().isAfter(value.expiry) 
-                    ? RegistryElement.merge(value, fetch(id))
-                    : value
-            ))
-                .map(entry->entry.getFeedService(this::getRemote))
-        );
+        return LOG.exit(getNodeInfo(id).map(entry->entry.getFeedService(this, feedServiceResolver)));
     }    
     
-    @Override
-    public Stream<FeedService> getServices(Predicate<FeedService>... filters) {
-        LOG.entry((Object[])filters);
+    Stream<RegistryElement> getNodeInfo() {
         boolean updateCache = false;
         
+        Instant now = Instant.now();
         // Prevent multiple updates running concurrently. However, we are good
         // with processess seeing old data while the update is runnig
         synchronized(expiryUpdateLock) {
-            if (Instant.now().isAfter(expiry)) {
+            if (now.isAfter(expiry)) {
                 expiry = Instant.now().plusMillis(CACHE_TTL_MILLISECOND);
                 updateCache = true;
             }
@@ -122,27 +145,46 @@ public abstract class CachingCluster implements Cluster {
                 fetchAll()
                 .forEach(element -> cache.merge(element.serviceId, element, RegistryElement::merge));
             // This will remove any expired elements from the cache
-            cache.entrySet().removeIf(entry->Instant.now().isAfter(entry.getValue().expiry));
+            cache.entrySet().removeIf(entry->now.isAfter(entry.getValue().expiry));
         }
+
+        return cache.values().stream();
+    }
+    
+    @Override
+    public Stream<FeedService> getServices(Predicate<FeedService>... filters) {
+        LOG.entry((Object[])filters);
         
         return LOG.exit(
-            cache.values().stream()
-                .map(entry->entry.getFeedService(this::getRemote))
+            getNodeInfo()
+                .map(entry->entry.getFeedService(this, feedServiceResolver))
                 .filter(Stream.of(filters).reduce(i->true, Predicate::and))
         );
     }
     
-    public void replicate(FeedService to, FeedService from) {
+    private void replicate(RegistryElement to, RegistryElement from) {
         LOG.entry(to, from);
         LOG.debug("Service {} will replicate data from {}", to, from);
-        Replicator replicator = new Replicator(executor, to, from);
-        synchronized(this) {
-            if (remotes.add(replicator)) {
-                replicator.startMonitor();
+        if (to.isLocal()) {
+            Replicator replicator = new Replicator(executor, to.getFeedService(this, feedServiceResolver), from.getFeedService(this, feedServiceResolver));
+            synchronized(this) {
+                if (remotes.add(replicator)) {
+                    replicator.startMonitor();
+                }
             }
+        } else {
+            clusterResolver.resolve(to.uri).replicate(to.serviceId, from.serviceId);
         }
         LOG.exit();
     }    
+    
+    @Override
+    public void replicate(UUID from, UUID to) {
+        replicate(
+            getNodeInfo(from).orElseThrow(()->new RuntimeException("Invalid node " + from)), 
+            getNodeInfo(to).orElseThrow(()->new RuntimeException("Invalid node " + to))
+        );
+    }
     
     @Override
     public void register(FeedService service, URI endpoint) {
@@ -150,13 +192,34 @@ public abstract class CachingCluster implements Cluster {
         UUID serverId = service.getServerId();
         synchronized(this) {
             try (AutoCloseable lock = lock(serverId)) {
-                service.initialize(this);
+                service.setCluster(this);
                 RegistryElement entry = new RegistryElement(serverId, endpoint, service);
                 cache.put(serverId, entry);
                 save(entry);
-                getServices(Cluster.Filters.idIsNot(serverId)).forEach(other->{
-                     replicate(service, other);
-                     replicate(other, service);
+                getNodeInfo().filter(node->!node.serviceId.equals(serverId)).forEach(other->{
+                     replicate(entry, other);
+                     replicate(other, entry);
+                });
+            } catch (Exception ex) {
+                LOG.error("Error registering feed service in cluster", ex);
+                throw LOG.throwing(new RuntimeException(ex));
+            }
+        }
+        LOG.exit();
+    }
+    
+    @Override
+    public void register(UUID serverId, URI endpoint) {
+        LOG.entry(endpoint);
+        synchronized(this) {
+            try (AutoCloseable lock = lock(serverId)) {
+                //service.initialize(this);
+                RegistryElement entry = new RegistryElement(serverId, endpoint);
+                cache.put(serverId, entry);
+                save(entry);
+                getNodeInfo().filter(node->!node.serviceId.equals(serverId)).forEach(other->{
+                     replicate(entry, other);
+                     replicate(other, entry);
                 });
             } catch (Exception ex) {
                 LOG.error("Error registering feed service in cluster", ex);
@@ -182,7 +245,6 @@ public abstract class CachingCluster implements Cluster {
         remotes.forEach(remote->remote.dumpState(out));
     }    
     
-    public abstract FeedService getRemote(URI endpoint);
     public abstract RegistryElement fetch(UUID id);
     public abstract Stream<RegistryElement> fetchAll();
     public abstract void remove(UUID id);

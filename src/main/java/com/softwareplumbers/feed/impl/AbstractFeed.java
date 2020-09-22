@@ -364,15 +364,17 @@ public abstract class AbstractFeed implements Feed {
     public MessageIterator relay(FeedService service, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
         LOG.entry(getName(), service, from, fromInclusive, to, toInclusive, serverId, filters);
         MessageIterator result = MessageIterator.EMPTY;
-        try (Stream<FeedService> remotes = service.getCluster().getServices(remote -> !Objects.equals(service.getServerId(), remote.getServerId()))) {
-            for (FeedService remote : (Iterable<FeedService>)remotes::iterator) {
-                MessageIterator.Peekable remoteResult = remote.search(getName(), serverId, from, fromInclusive, to, toInclusive, Optional.of(false), filters).peekable();
-                Instant remoteFrom = remoteResult.peek().map(message->message.getTimestamp()).orElse(Instant.MAX);
-                LOG.debug("Relay search found messages between {} and {} on serverId {}", from, to, remote.getServerId());
-                if (to.isPresent() && (toInclusive.orElse(true) && !remoteFrom.isAfter(to.get()) || remoteFrom.isBefore(to.get()))) {
-                    result = MessageIterator.of(remoteResult, result);
-                    to = Optional.of(remoteFrom);
-                    toInclusive = Optional.of(false);
+        if (service.getCluster().isPresent()) {
+            try (Stream<FeedService> remotes = service.getCluster().get().getServices(remote -> !Objects.equals(service.getServerId(), remote.getServerId()))) {
+                for (FeedService remote : (Iterable<FeedService>)remotes::iterator) {
+                    MessageIterator.Peekable remoteResult = remote.search(getName(), serverId, from, fromInclusive, to, toInclusive, Optional.of(false), filters).peekable();
+                    Instant remoteFrom = remoteResult.peek().map(message->message.getTimestamp()).orElse(Instant.MAX);
+                    LOG.debug("Relay search found messages between {} and {} on serverId {}", from, to, remote.getServerId());
+                    if (to.isPresent() && (toInclusive.orElse(true) && !remoteFrom.isAfter(to.get()) || remoteFrom.isBefore(to.get()))) {
+                        result = MessageIterator.of(remoteResult, result);
+                        to = Optional.of(remoteFrom);
+                        toInclusive = Optional.of(false);
+                    }
                 }
             }
         }

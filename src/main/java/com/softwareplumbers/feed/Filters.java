@@ -51,7 +51,9 @@ public class Filters {
             this.serverId = serverId;
             this.from = from;
             this.to = to;
-            this.initTime = service.getCluster().getService(serverId)
+            this.initTime = service.getCluster()
+                .orElseThrow(()->new RuntimeException("service must be registered to a cluster to search by a remote timestamp"))    
+                .getService(serverId)
                 .orElseThrow(()->new RuntimeException("invalid server id " + serverId))
                 .getInitTime();
         }

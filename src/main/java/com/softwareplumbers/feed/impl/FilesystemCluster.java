@@ -5,7 +5,9 @@
  */
 package com.softwareplumbers.feed.impl;
 
+import com.softwareplumbers.feed.Cluster;
 import com.softwareplumbers.feed.FeedExceptions;
+import com.softwareplumbers.feed.FeedService;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -30,14 +32,14 @@ import org.slf4j.ext.XLoggerFactory;
  *
  * @author jonathan essex
  */
-public abstract class FilesystemCluster extends CachingCluster {
+public class FilesystemCluster extends CachingCluster {
     
     private static final XLogger LOG = XLoggerFactory.getXLogger(FilesystemCluster.class);
     static final Pattern FILENAME_MATCH_TEMPLATE = Pattern.compile("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}");
     private final Path clusterDir;
     
-    public FilesystemCluster(ExecutorService executor, Path clusterDir) throws IOException {
-        super(executor);
+    public FilesystemCluster(ExecutorService executor, Path clusterDir, Resolver<FeedService> feedServiceResolver, Resolver<Cluster> clusterResolver) throws IOException {
+        super(executor, feedServiceResolver, clusterResolver);
         this.clusterDir = clusterDir;
         Files.createDirectories(clusterDir);
     }
@@ -55,12 +57,17 @@ public abstract class FilesystemCluster extends CachingCluster {
     @Override 
     public Stream<RegistryElement> fetchAll() {
         LOG.entry();
+        try {
         return LOG.exit(
-            StreamSupport.stream(clusterDir.spliterator(), false)
+            Files.list(clusterDir)
                 .map(path->path.getFileName().toString())
+                .peek(filename->LOG.trace("registry entry: {}", filename))
                 .filter(filename->FILENAME_MATCH_TEMPLATE.matcher(filename).matches())
                 .map(filename->fetch(UUID.fromString(filename)))
         );
+        } catch (IOException ioe) {
+            throw FeedExceptions.runtime(ioe);
+        }
     }
     
 

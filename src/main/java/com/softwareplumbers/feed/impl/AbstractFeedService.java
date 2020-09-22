@@ -12,16 +12,11 @@ import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.FeedService;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.Instant;
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
@@ -39,36 +34,35 @@ public abstract class AbstractFeedService implements FeedService {
     
     private final ScheduledExecutorService callbackExecutor;
     protected final UUID serverId;
-    protected Cluster cluster;
+    protected Optional<Cluster> cluster;
     protected final Instant initTime;
     private final AbstractFeed rootFeed;
     private final long ackTimeout = 600; // 10 minutes
-
+    
     public AbstractFeedService(UUID serverId, ScheduledExecutorService callbackExecutor, Instant initTime, AbstractFeed rootFeed) {
         this.callbackExecutor = callbackExecutor;
         this.serverId = serverId;
-        this.cluster = Cluster.local(this);
+        this.cluster = Optional.empty();
         this.initTime = initTime;          
         this.rootFeed = rootFeed;
-
     }
     
     public long getAckTimeout() {
         return ackTimeout;
     }
-    
+     
     @Override
-    public void initialize(Cluster cluster) {
+    public void setCluster(Cluster cluster) {
         LOG.entry(cluster);
         LOG.debug("Initializing feed service {}", this);
-        this.cluster = cluster;
+        this.cluster = Optional.of(cluster);
         LOG.exit();
     }
     
     @Override
     public void close() {
         LOG.entry();
-        cluster.deregister(this);
+        cluster.ifPresent(c->c.deregister(this));
         LOG.exit();
     }
         
@@ -85,7 +79,7 @@ public abstract class AbstractFeedService implements FeedService {
     }
     
     @Override
-    public Cluster getCluster() {
+    public Optional<Cluster> getCluster() {
         return cluster;
     }
     

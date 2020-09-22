@@ -35,15 +35,17 @@ public class LocalConfig {
         return new DummyFeedService(100000, 2000);
     }
     
+    private static <T> T unsupportedOperation(URI uri) { throw new UnsupportedOperationException("Test cluster is local only"); }
+    
     @Bean
     @Scope("singleton")
     Cluster testSimpleCluster() throws IOException {        
-        return new FilesystemCluster(Executors.newFixedThreadPool(4), Paths.get(env.getProperty("installation.root")).resolve("cluster")) {
-            @Override
-            public FeedService getRemote(URI endpoint) {
-                throw new UnsupportedOperationException("Test cluster is local only"); 
-            }            
-        };
+        return new FilesystemCluster(
+            Executors.newFixedThreadPool(4), 
+            Paths.get(env.getProperty("installation.root")).resolve("cluster"), 
+            LocalConfig::unsupportedOperation, 
+            LocalConfig::unsupportedOperation
+        );
     }
     
     @Bean

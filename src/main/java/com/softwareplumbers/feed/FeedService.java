@@ -60,13 +60,11 @@ public interface FeedService extends AutoCloseable {
     /** Provides cluster details to the feed service.
      * 
      * A feed service is registered to a cluster with Cluster.register(service). Later,
-     * the cluster will call back FeedService.initialize(cluster); Cluster guarantees
-     * that initialize will be called at most once and that the service is fully registered
-     * by the cluster before initialize is called.
+     * the cluster will call back FeedService.setCluster(cluster)
      * 
      * @param cluster 
      */
-    void initialize(Cluster cluster);
+    void setCluster(Cluster cluster);
         
     Instant getInitTime();
     
@@ -185,14 +183,14 @@ public interface FeedService extends AutoCloseable {
      */
     UUID getServerId();
     
-    /** Get the Cluster to which this service belongs.
+    /** Get the Cluster to which this service belongs, if any.
      * 
      * The Cluster object can be used to access other servers in the same cluster
      * as 'this' one.
      * 
      * @return A Cluster object.
-     */
-    Cluster getCluster();
+     */    
+    Optional<Cluster> getCluster();
     
     public Feed getFeed(FeedPath path) throws InvalidPath;
     

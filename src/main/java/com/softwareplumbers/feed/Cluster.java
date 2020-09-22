@@ -54,50 +54,34 @@ public interface Cluster {
      */
     Stream<FeedService> getServices(Predicate<FeedService>... filters);
     
-    /** Register a service with this cluster.
+    /** Register a local service with this cluster.
      * 
      * Typically a Cluster implementation is a local facade over some network service (e.g. 
      * the Kubernetes API server) and not a service in its own right. This method is called
      * to register some local service as a node on the cluster, effectively advertising the
-     * local node on the provided URI.
+     * local node on the provided URI. (The user is responsible for ensuring the service
+     * actually responds to the given URI)
      * 
      * This method should be called once the given service is ready to start serving requests.
      * Implementers of the cluster interface are responsible for ensuring that a call to 
      * register(...) ultimately results in a call to the init method of the service being 
      * registered (which provides information about the cluster to the service), and that
-     * existing services in the cluster are requested to monitor the the new node
-     * via a call to the monitor method of each existing service node.
+     * replicate will be called as appropriate to set up replication between the new node
+     * and existing nodes in the cluster.
      * 
      * @param service Local service to register
      * @param endpoint endpoint on which the local service handles remote requests
      */
     void register(FeedService service, URI endpoint);
     
+    void register(UUID serverId, URI endpoint);
     
     void deregister(FeedService service);
     
-    /** Utility for creating a local, single-node cluster.
+    /** Set up replication in one direction between two feed services in the cluster 
      * 
-     * @param service The one and only service in the cluster.
-     * @return A trivial cluster object containing a single node.
+     * @param to Feed service receiving messages
+     * @param from Feed service supplying messages
      */
-    public static Cluster local(FeedService service) {
-        return new Cluster() {
-            @Override
-            public Optional<FeedService> getService(UUID id) {
-                return Objects.equals(service.getServerId(), id) ? Optional.of(service) : Optional.empty();
-            }
-            
-            @Override
-            public Stream<FeedService> getServices(Predicate<FeedService>... filters) {
-                return Stream.of(service).filter(Stream.of(filters).reduce(s->true, Predicate::and));
-            }
-
-            @Override
-            public void register(FeedService service, URI endpoint) {}
-            
-            @Override
-            public void deregister(FeedService service) {}
-        };
-    }
+    void replicate(UUID to, UUID from);
 }

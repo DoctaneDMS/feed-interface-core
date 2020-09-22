@@ -42,9 +42,9 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
  * @author jonat
  */
 @RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(classes = { LocalConfig.class })
+@ContextConfiguration(classes = { LocalConfigWithResolver.class })
 @DirtiesContext(classMode = ClassMode.AFTER_EACH_TEST_METHOD)
-public class TestCluster {
+public class TestClusterWithResolver {
     
     @Autowired @Qualifier(value="testSimpleClusterNodeA")
     protected FeedService nodeA;
@@ -58,44 +58,7 @@ public class TestCluster {
     public static Message post(FeedService service, Feed feed, Message message) {
         Message ack = feed.post(service, message); 
         return message.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get()); 
-    }
-    
-    @Test
-    public void testMessageRoundtripSingleThread() throws IOException, FeedExceptions.InvalidPath, InterruptedException, TimeoutException {
-        FeedPath path = randomFeedPath();
-        Instant start = Instant.now();
-        Thread.sleep(10);
-        Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
-        Feed feedA = nodeA.getFeed(path);
-        final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripSingleThread.SEND_COUNT", Integer.class);
-        generateMessages(SEND_COUNT, 2, path, message->post(nodeA, feedA, message)).forEach(message->sentMessages.add(message));
-        assertThat(sentMessages.size(), equalTo(SEND_COUNT));
-        Stream<Message> responseMessages = TestUtils.createReceiver(0, nodeB, SEND_COUNT, path, start);
-        TestUtils.assertMatch(sentMessages.stream(), responseMessages);
-    }
-    
-    @Test
-    public void testMessageRoundtripMonodirectional() throws IOException, FeedExceptions.InvalidPath, InterruptedException, ExecutionException, TimeoutException {
-        FeedPath path = randomFeedPath();
-        List<FeedPath> listOfPaths = Collections.singletonList(path);
-        Instant start = Instant.now();
-        Thread.sleep(10);
-        Feed feedA = nodeA.getFeed(path);
-        Feed feedB = nodeB.getFeed(path);
-        final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", Integer.class);
-        CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
-        CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT);
-        CompletableFuture.allOf(responseMessagesB, sentToA).get(20, TimeUnit.SECONDS);
-        List<Message> allSent = new ArrayList<>();
-        sentToA.get().forEach(allSent::add);
-        assertThat(allSent.size(), equalTo(SEND_COUNT));
-        List<Message> allReceivedB = responseMessagesB.get().get(0).messages.collect(Collectors.toList());
-        assertThat(allReceivedB, hasSize(SEND_COUNT));
-        Message lastReceivedB = allReceivedB.get(SEND_COUNT - 1);
-        assertMatch(allSent.stream(), allReceivedB.stream());
-        Thread.sleep(100);
-        assertNoMore(nodeB, feedB, lastReceivedB);
-    }    
+    }  
 
     @Test
     public void testMessageRoundtripBidirectional() throws IOException, FeedExceptions.InvalidPath, InterruptedException, ExecutionException, TimeoutException {
@@ -105,7 +68,7 @@ public class TestCluster {
         Thread.sleep(10);
         Feed feedA = nodeA.getFeed(path);
         Feed feedB = nodeB.getFeed(path);
-        final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", Integer.class);
+        final int SEND_COUNT = 8;
         CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
         CompletableFuture<Stream<Message>> sentToB = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeB, feedB, message));
         CompletableFuture<List<Receiver>> responseMessagesA = TestUtils.createReceivers(1, nodeA, listOfPaths, start, SEND_COUNT * 2);
@@ -126,10 +89,5 @@ public class TestCluster {
         Thread.sleep(100);
         assertNoMore(nodeA, feedA, lastReceivedA);
         assertNoMore(nodeB, feedB, lastReceivedB);
-    }
-    
-    @Test 
-    public void testResolver() {
-        
     }
 }
