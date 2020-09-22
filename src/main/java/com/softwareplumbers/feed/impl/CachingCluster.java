@@ -9,6 +9,7 @@ import com.softwareplumbers.feed.Cluster;
 import com.softwareplumbers.feed.FeedService;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.time.Instant;
 import java.util.HashMap;
@@ -253,6 +254,22 @@ public abstract class CachingCluster implements Cluster {
         LOG.exit();
     }
     
+    public void setCredential(URI remote, JsonObject credential) {
+        credentials.put(remote, credential);
+    }
+
+    public void setCredential(URI remote, String username, String password) {
+        JsonObjectBuilder credential = Json.createObjectBuilder();
+        credential.add("username", username);
+        credential.add("password", password);
+        setCredential(remote, credential.build());
+    }
+    
+    public void setCredentials(Map<URI, JsonObject> credentials) {
+        this.credentials.clear();
+        this.credentials.putAll(credentials);
+    }
+   
     public void dumpState(PrintWriter out) throws IOException {
         remotes.forEach(remote->remote.dumpState(out));
     }    
