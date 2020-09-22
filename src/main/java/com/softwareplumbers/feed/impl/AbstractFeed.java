@@ -195,7 +195,7 @@ public abstract class AbstractFeed implements Feed {
                     if (!callback.future.isCancelled()) {
                         if (callback.predicate.test(message)) {
                             service.callback(() -> { 
-                                MessageIterator messages = search(service, service.getServerId(), entryTimestamp, Optional.of(false), callback.predicate);
+                                MessageIterator messages = search(service, service.getServerId(), callback.fromTime, Optional.of(false), callback.predicate);
                                 if (messages.hasNext()) {
                                     LOG.trace("Completing callback with messages");
                                     callback.future.complete(messages);
@@ -231,7 +231,7 @@ public abstract class AbstractFeed implements Feed {
                     removeTrigger(callback);
                     if (!callback.future.isCancelled()) {
                         service.callback(() -> { 
-                            MessageIterator messages = search(service, service.getServerId(), now, Optional.of(false), callback.predicate);
+                            MessageIterator messages = search(service, service.getServerId(), callback.fromTime, Optional.of(false), callback.predicate);
                             callback.future.complete(messages);
                         });
                     }
