@@ -107,7 +107,7 @@ public abstract class CachingCluster implements Cluster {
         
         @Override
         public String toString() {
-            return String.format("RegistryEntry[expires %s,  %s]", expiry, toJson());
+            return String.format("RegistryEntry[%s@%s %s expires %s]", serviceId, uri, local ? "(local)" : "", expiry);
         }
         
         public boolean isLocal() {
@@ -271,6 +271,11 @@ public abstract class CachingCluster implements Cluster {
     }
    
     public void dumpState(PrintWriter out) {
+        out.println("Node cache:");
+        cache.values().forEach(re->out.println(re.toString()));
+        out.println("Credentials:");
+        credentials.forEach((uri,credential)->out.format("for %s: %s\n", uri, credential));
+        out.println("Remotes:");
         remotes.forEach(remote->remote.dumpState(out));
     }    
     

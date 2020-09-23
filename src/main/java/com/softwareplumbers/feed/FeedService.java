@@ -15,6 +15,7 @@ package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
+import java.io.PrintWriter;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -195,4 +196,6 @@ public interface FeedService extends AutoCloseable {
     public Feed getFeed(FeedPath path) throws InvalidPath;
     
     public Stream<Feed> getFeeds();
+    
+    public void dumpState(PrintWriter out);
 }

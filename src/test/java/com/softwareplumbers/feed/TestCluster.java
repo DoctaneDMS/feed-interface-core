@@ -12,6 +12,7 @@ import static com.softwareplumbers.feed.test.TestUtils.assertNoMore;
 import static com.softwareplumbers.feed.test.TestUtils.generateMessages;
 import static com.softwareplumbers.feed.test.TestUtils.randomFeedPath;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -51,6 +52,9 @@ public class TestCluster {
 
     @Autowired @Qualifier(value="testSimpleClusterNodeB")
     protected FeedService nodeB;
+
+    @Autowired @Qualifier(value="testSimpleCluster")
+    protected Cluster cluster;
     
     @Autowired
     protected Environment env;
@@ -129,7 +133,12 @@ public class TestCluster {
     }
     
     @Test 
-    public void testResolver() {
-        
+    public void testDumpState() {
+        System.out.println("testDumpState");
+        try (PrintWriter writer = new PrintWriter(System.out)) {
+            cluster.dumpState(writer);
+            nodeA.dumpState(writer);
+            nodeB.dumpState(writer);
+        }
     }
 }

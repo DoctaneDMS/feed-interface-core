@@ -80,7 +80,7 @@ class Replicator {
     }
 
     public void dumpState(PrintWriter out) {
-        out.println(String.format("Remote: %s, received: %d, errors: %d, last error: %s", from.getServerId(), receivedCount, errorCount, lastException.map(t -> t.getMessage()).orElse("none")));
+        out.println(String.format("Replicator: %s -> %s, received: %d, errors: %d, last error: %s", from.getServerId(), to.getServerId(), receivedCount, errorCount, lastException.map(t -> t.getMessage()).orElse("none")));
     }
     
     @Override
