@@ -54,7 +54,7 @@ class Replicator {
                     from.watch(to.getServerId(), message.getTimestamp(), timeoutMillis).whenCompleteAsync(this::monitorCallback, callbackExecutor);
                 }
             } catch (Exception exp) {
-                LOG.error("Error {}, monitoring {}", exp, from.getServerId());
+                LOG.error("Error monitoring {}", from.getServerId(), exp);
                 lastException = Optional.of(exp);
                 errorCount++;
             }
@@ -81,6 +81,7 @@ class Replicator {
 
     public void dumpState(PrintWriter out) {
         out.println(String.format("Replicator: %s -> %s, received: %d, errors: %d, last error: %s", from.getServerId(), to.getServerId(), receivedCount, errorCount, lastException.map(t -> t.getMessage()).orElse("none")));
+        lastException.ifPresent(e->e.printStackTrace(out));
     }
     
     @Override
