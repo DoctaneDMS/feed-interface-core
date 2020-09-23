@@ -270,7 +270,7 @@ public abstract class CachingCluster implements Cluster {
         this.credentials.putAll(credentials);
     }
    
-    public void dumpState(PrintWriter out) throws IOException {
+    public void dumpState(PrintWriter out) {
         remotes.forEach(remote->remote.dumpState(out));
     }    
     

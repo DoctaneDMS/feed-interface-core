@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import java.io.PrintWriter;
 import java.net.URI;
 import java.util.Objects;
 import java.util.Optional;
@@ -84,4 +85,6 @@ public interface Cluster {
      * @param from Feed service supplying messages
      */
     void replicate(UUID to, UUID from);
+    
+    void dumpState(PrintWriter out);
 }
