@@ -185,6 +185,7 @@ public abstract class AbstractFeed implements Feed {
         LOG.entry(service, message);
         synchronized(this) {
             Iterator<Map.Entry<Instant, List<Callback>>> activated = callbacks.headMap(message.getTimestamp(), false).entrySet().iterator();
+            List<Callback> retries = new LinkedList();
             while (activated.hasNext()) {
                 final Map.Entry<Instant, List<Callback>> entry = activated.next();
                 Instant entryTimestamp = entry.getKey();
@@ -199,12 +200,13 @@ public abstract class AbstractFeed implements Feed {
                                 callback.future.complete(messages);
                             });
                         } else {
-                            LOG.trace("Callback matched no messages");
-                            addCallback(service, callback);
+                            LOG.trace("Callback did not match predicate {}", callback.predicate);
+                            retries.add(callback);
                         }
                     }
                 }
             }
+            retries.forEach(callback->addCallback(service, callback));
         }
         parentFeed.ifPresent(feed->feed.trigger(service, message));
         LOG.exit();
