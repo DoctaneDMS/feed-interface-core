@@ -233,9 +233,8 @@ public abstract class CachingCluster implements Cluster {
         LOG.entry(endpoint);
         synchronized(this) {
             try (AutoCloseable lock = lock(serverId)) {
-                //service.initialize(this);
-                RegistryElement entry = new RegistryElement(serverId, endpoint);
-                cache.put(serverId, entry);
+                RegistryElement entry = cache.merge(serverId, new RegistryElement(serverId, endpoint), RegistryElement::merge);
+                entry.getFeedService(this, defaultCredential, feedServiceResolver).setCluster(this);
                 save(entry);
                 getNodeInfo().filter(node->!node.serviceId.equals(serverId)).forEach(other->{
                      replicate(entry, other);
