@@ -196,15 +196,7 @@ public abstract class AbstractFeed implements Feed {
                         if (callback.predicate.test(message)) {
                             service.callback(() -> { 
                                 MessageIterator messages = search(service, service.getServerId(), callback.fromTime, Optional.of(false), callback.predicate);
-                                if (messages.hasNext()) {
-                                    LOG.trace("Completing callback with messages");
-                                    callback.future.complete(messages);
-                                } else {
-                                    // This shouldn't happen, but... belt and braces.
-                                    LOG.warn("No messages, resubmitting callback {}", callback);
-                                    messages.close();
-                                    addCallback(service, callback);
-                                }
+                                callback.future.complete(messages);
                             });
                         } else {
                             LOG.trace("Callback matched no messages");
