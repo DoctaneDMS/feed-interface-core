@@ -64,6 +64,16 @@ public class TestCluster {
         return message.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get()); 
     }
     
+    protected long getTimeout() {
+        Long value = env.getProperty("test.TestCluster.TIMEOUT", Long.class);
+        return value == null ? 20 : value;
+    }
+
+    protected void pauseAfter() throws InterruptedException {
+        Long value = env.getProperty("test.TestCluster.PAUSE_AFTER", Long.class);
+        Thread.sleep(value == null ? 500 : value);
+    }
+        
     @Test
     public void testMessageRoundtripSingleThread() throws IOException, FeedExceptions.InvalidPath, InterruptedException, TimeoutException {
         FeedPath path = randomFeedPath();
@@ -76,6 +86,7 @@ public class TestCluster {
         assertThat(sentMessages.size(), equalTo(SEND_COUNT));
         Stream<Message> responseMessages = TestUtils.createReceiver(0, nodeB, SEND_COUNT, path, start);
         TestUtils.assertMatch(sentMessages.stream(), responseMessages);
+        pauseAfter();
     }
     
     @Test
@@ -86,10 +97,10 @@ public class TestCluster {
         Thread.sleep(10);
         Feed feedA = nodeA.getFeed(path);
         Feed feedB = nodeB.getFeed(path);
-        final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", Integer.class);
+        final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripMonodirectional.SEND_COUNT", Integer.class);
         CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
         CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT);
-        CompletableFuture.allOf(responseMessagesB, sentToA).get(20, TimeUnit.SECONDS);
+        CompletableFuture.allOf(responseMessagesB, sentToA).get(getTimeout(), TimeUnit.SECONDS);
         List<Message> allSent = new ArrayList<>();
         sentToA.get().forEach(allSent::add);
         assertThat(allSent.size(), equalTo(SEND_COUNT));
@@ -99,6 +110,7 @@ public class TestCluster {
         assertMatch(allSent.stream(), allReceivedB.stream());
         Thread.sleep(100);
         assertNoMore(nodeB, feedB, lastReceivedB);
+        pauseAfter();
     }    
 
     @Test
@@ -114,7 +126,7 @@ public class TestCluster {
         CompletableFuture<Stream<Message>> sentToB = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeB, feedB, message));
         CompletableFuture<List<Receiver>> responseMessagesA = TestUtils.createReceivers(1, nodeA, listOfPaths, start, SEND_COUNT * 2);
         CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT * 2);
-        CompletableFuture.allOf(responseMessagesA, responseMessagesB, sentToA, sentToB).get(20, TimeUnit.SECONDS);
+        CompletableFuture.allOf(responseMessagesA, responseMessagesB, sentToA, sentToB).get(getTimeout(), TimeUnit.SECONDS);
         ArrayList<Message> allSent = new ArrayList<>();
         sentToA.get().forEach(allSent::add);
         sentToB.get().forEach(allSent::add);
@@ -130,15 +142,17 @@ public class TestCluster {
         Thread.sleep(100);
         assertNoMore(nodeA, feedA, lastReceivedA);
         assertNoMore(nodeB, feedB, lastReceivedB);
+        pauseAfter();
     }
     
     @Test 
-    public void testDumpState() {
+    public void testDumpState() throws InterruptedException {
         System.out.println("testDumpState");
         try (PrintWriter writer = new PrintWriter(System.out)) {
             cluster.dumpState(writer);
             nodeA.dumpState(writer);
             nodeB.dumpState(writer);
         }
+        pauseAfter();
     }
 }
