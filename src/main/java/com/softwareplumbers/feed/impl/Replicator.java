@@ -54,7 +54,7 @@ class Replicator {
                     from.watch(to.getServerId(), message.getTimestamp(), timeoutMillis).whenCompleteAsync(this::monitorCallback, callbackExecutor);
                 }
             } catch (Exception exp) {
-                LOG.error("Error monitoring {}", from.getServerId());
+                LOG.error("Error {}, monitoring {}", exp, from.getServerId());
                 lastException = Optional.of(exp);
                 errorCount++;
             }
