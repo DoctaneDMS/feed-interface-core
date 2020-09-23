@@ -60,7 +60,7 @@ public abstract class AbstractFeedService implements FeedService {
     }
     
     @Override
-    public void close() {
+    public void close() throws Exception {
         LOG.entry();
         cluster.ifPresent(c->c.deregister(this));
         LOG.exit();
