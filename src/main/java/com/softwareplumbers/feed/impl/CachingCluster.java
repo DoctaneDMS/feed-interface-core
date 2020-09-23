@@ -79,7 +79,7 @@ public abstract class CachingCluster implements Cluster {
         public FeedService getFeedService(Cluster cluster, JsonObject credentials, Resolver<FeedService> resolver) {
             if (service == null) {
                 service = resolver.resolve(uri, credentials)
-                    .orElseThrow(()->new RuntimeException("Can't resovle feed service"));
+                    .orElseThrow(()->new RuntimeException("Can't resolve feed service"));
                 service.setCluster(cluster);
             }
             return service;
@@ -173,20 +173,27 @@ public abstract class CachingCluster implements Cluster {
         );
     }
     
+    private void replicateLocally(RegistryElement to, RegistryElement from) {
+        Replicator replicator = new Replicator(executor, to.getFeedService(this, getCredential(to.uri), feedServiceResolver), from.getFeedService(this, getCredential(from.uri), feedServiceResolver));
+        synchronized(this) {
+            if (remotes.add(replicator)) {
+                replicator.startMonitor();
+            }
+        }        
+    }
+    
     private void replicate(RegistryElement to, RegistryElement from) {
         LOG.entry(to, from);
         LOG.debug("Service {} will replicate data from {}", to, from);
         if (to.isLocal()) {
-            Replicator replicator = new Replicator(executor, to.getFeedService(this, getCredential(to.uri), feedServiceResolver), from.getFeedService(this, getCredential(from.uri), feedServiceResolver));
-            synchronized(this) {
-                if (remotes.add(replicator)) {
-                    replicator.startMonitor();
-                }
-            }
+            replicateLocally(to, from);
         } else {
-            clusterResolver.resolve(to.uri, getCredential(to.uri))
-                .orElse(this) // in the case where URI is a distributed node
-                .replicate(to.serviceId, from.serviceId);
+            Optional<Cluster> remoteClusterEndpoint = clusterResolver.resolve(to.uri, getCredential(to.uri));
+            if (remoteClusterEndpoint.isPresent())
+                remoteClusterEndpoint.get().replicate(to.serviceId, from.serviceId);
+            else {
+                replicateLocally(to, from);
+            }
         }
         LOG.exit();
     }    

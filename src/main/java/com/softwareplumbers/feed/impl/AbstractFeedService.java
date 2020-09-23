@@ -148,7 +148,7 @@ public abstract class AbstractFeedService implements FeedService {
     
     @Override
     public MessageIterator search(FeedPath path, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Optional<Boolean> relay, Predicate<Message>... filters) throws FeedExceptions.InvalidPath {
-        LOG.entry(path, from, fromInclusive, to, toInclusive, serverId);
+        LOG.entry(path, serverId, from, fromInclusive, to, toInclusive, relay);
         return LOG.exit(getFeed(path).search(this, serverId, from, fromInclusive, to, toInclusive, relay, filters));
     }
             
