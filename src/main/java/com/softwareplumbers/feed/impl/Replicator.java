@@ -9,6 +9,7 @@ import com.softwareplumbers.feed.FeedService;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
 import java.io.PrintWriter;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -30,6 +31,7 @@ class Replicator {
     private long errorCount = 0;
     private boolean closed;
     private long timeoutMillis = 10000;
+    private Instant pollingFrom;
     private ExecutorService callbackExecutor;
 
     private void monitorCallback(MessageIterator messages, Throwable exception) {
@@ -42,16 +44,16 @@ class Replicator {
             lastException = Optional.of(exception);
             errorCount++;
         } else {
-            Message message = null;
             try {
                 while (messages.hasNext()) {
-                    message = messages.next();
+                    Message message = messages.next();
                     receivedCount++;
+                    pollingFrom = message.getTimestamp();
                     to.replicate(message);
                 }
                 messages.close();
                 if (!closed) {
-                    from.watch(to.getServerId(), message.getTimestamp(), timeoutMillis).whenCompleteAsync(this::monitorCallback, callbackExecutor);
+                    from.watch(to.getServerId(), pollingFrom, timeoutMillis).whenCompleteAsync(this::monitorCallback, callbackExecutor);
                 }
             } catch (Exception exp) {
                 LOG.error("Error monitoring {}", from.getServerId(), exp);
@@ -68,6 +70,7 @@ class Replicator {
         this.to = to;
         this.callbackExecutor = callbackExecutor;
         this.closed = false;
+        this.pollingFrom = to.getInitTime();
         LOG.exit();
     }
 
