@@ -30,6 +30,8 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.slf4j.ext.XLogger;
+import org.slf4j.ext.XLoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.env.Environment;
@@ -46,6 +48,8 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 @ContextConfiguration(classes = { LocalConfig.class })
 @DirtiesContext(classMode = ClassMode.AFTER_EACH_TEST_METHOD)
 public class TestCluster {
+    
+    private static final XLogger LOG = XLoggerFactory.getXLogger(TestCluster.class);
     
     @Autowired @Qualifier(value="testSimpleClusterNodeA")
     protected FeedService nodeA;
@@ -90,6 +94,7 @@ public class TestCluster {
     
     @Test
     public void testMessageRoundtripMonodirectional() throws IOException, FeedExceptions.InvalidPath, InterruptedException, ExecutionException, TimeoutException {
+        LOG.entry();
         FeedPath path = randomFeedPath();
         List<FeedPath> listOfPaths = Collections.singletonList(path);
         Instant start = Instant.now().minusMillis(10);
@@ -97,10 +102,13 @@ public class TestCluster {
         Feed feedB = nodeB.getFeed(path);
         Feed feedC = nodeC.getFeed(path);
         final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripMonodirectional.SEND_COUNT", Integer.class);
+        LOG.info("Creating sender thread");
         CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
+        LOG.info("Creating receiver threads");
         CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT);
         CompletableFuture<List<Receiver>> responseMessagesC = TestUtils.createReceivers(1, nodeC, listOfPaths, start, SEND_COUNT);
         CompletableFuture.allOf(responseMessagesB, responseMessagesC, sentToA).get(getTimeout(), TimeUnit.SECONDS);
+        LOG.info("sender/receiver threads complete");
         List<Message> allSent = new ArrayList<>();
         sentToA.get().forEach(allSent::add);
         assertThat(allSent.size(), equalTo(SEND_COUNT));
@@ -115,22 +123,27 @@ public class TestCluster {
         Thread.sleep(100);
         assertNoMore(nodeB, feedB, lastReceivedB);
         assertNoMore(nodeC, feedC, lastReceivedC);
+        LOG.exit();
     }    
 
     @Test
     public void testMessageRoundtripBidirectional() throws IOException, FeedExceptions.InvalidPath, InterruptedException, ExecutionException, TimeoutException {
+        LOG.entry();
         FeedPath path = randomFeedPath();
         List<FeedPath> listOfPaths = Collections.singletonList(path);
         Instant start = Instant.now().minusMillis(10);
         Feed feedA = nodeA.getFeed(path);
         Feed feedB = nodeB.getFeed(path);
         final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", Integer.class);
+        LOG.info("Creating sender threads");
         CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
         CompletableFuture<Stream<Message>> sentToB = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeB, feedB, message));
+        LOG.info("Creating receiver threads");
         CompletableFuture<List<Receiver>> responseMessagesA = TestUtils.createReceivers(1, nodeA, listOfPaths, start, SEND_COUNT * 2);
         CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT * 2);
         CompletableFuture<List<Receiver>> responseMessagesC = TestUtils.createReceivers(1, nodeC, listOfPaths, start, SEND_COUNT * 2);
         CompletableFuture.allOf(responseMessagesA, responseMessagesB, responseMessagesC, sentToA, sentToB).get(getTimeout(), TimeUnit.SECONDS);
+        LOG.info("sender/receiver threads complete");
         ArrayList<Message> allSent = new ArrayList<>();
         sentToA.get().forEach(allSent::add);
         sentToB.get().forEach(allSent::add);
@@ -146,6 +159,7 @@ public class TestCluster {
         Thread.sleep(100);
         assertNoMore(nodeA, feedA, lastReceivedA);
         assertNoMore(nodeB, feedB, lastReceivedB);
+        LOG.exit();
     }
     
     @Test 
