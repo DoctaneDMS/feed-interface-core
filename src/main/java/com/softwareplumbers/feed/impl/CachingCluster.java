@@ -285,6 +285,11 @@ public abstract class CachingCluster implements Cluster {
         remotes.forEach(remote->remote.dumpState(out));
     }    
     
+    @Override
+    public void close() throws Exception {
+        executor.shutdown();
+    }
+    
     public abstract RegistryElement fetch(UUID id);
     public abstract Stream<RegistryElement> fetchAll();
     public abstract void remove(UUID id);

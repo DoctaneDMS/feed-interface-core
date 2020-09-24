@@ -17,7 +17,7 @@ import java.util.stream.Stream;
  *
  * @author Jonathan Essex
  */
-public interface Cluster {
+public interface Cluster extends AutoCloseable {
     
     public static class Filters {
         
