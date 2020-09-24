@@ -35,6 +35,7 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.fail;
 import org.junit.Test;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.env.Environment;
 
 /**
  *
@@ -47,6 +48,9 @@ public class TestFeedService {
     @Autowired @Qualifier(value="testService")
     protected FeedService service;
     
+    @Autowired
+    protected Environment env;
+    
     public Message post(Message message) {
         try {
             Message ack = service.post(message.getFeedName(), message);
@@ -57,16 +61,22 @@ public class TestFeedService {
         }
     }
     
+    protected long getTimeout() {
+        Long value = env.getProperty("test.TestFeedService.TIMEOUT", Long.class);
+        return value == null ? 20 : value;
+    }    
+    
     @Test
     public void testMessageRoundtripSingleThread() throws IOException, InvalidPath, InterruptedException {
         FeedPath path = randomFeedPath();
         Instant start = Instant.now();
         Thread.sleep(10);
         Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
-        generateMessages(1000, 2, path, this::post).forEach(message->sentMessages.add(message));
+        final int SEND_COUNT = env.getProperty("test.TestFeedService.testMessageRoundtripSingleThread.SEND_COUNT", Integer.class);        
+        generateMessages(SEND_COUNT, 2, path, this::post).forEach(message->sentMessages.add(message));
         List<FeedPath> feeds = getFeeds();
         //service.dumpState();
-        assertThat(sentMessages.size(), equalTo(1000));
+        assertThat(sentMessages.size(), equalTo(SEND_COUNT));
         TreeMap<FeedPath, Message> responseMessages = new TreeMap<>();
         int count = 0;
         try (MessageIterator messages = service.search(path, service.getServerId(), start, Filters.NO_ACKS)) {
@@ -78,7 +88,7 @@ public class TestFeedService {
                 count++;
             }
         }
-        assertThat(count, equalTo(1000));        
+        assertThat(count, equalTo(SEND_COUNT));        
     }
     
     @Test 
@@ -108,7 +118,7 @@ public class TestFeedService {
     @Test
     public void testMessagesForFeed() throws InterruptedException, ExecutionException, TimeoutException {
         //more of a test-of-test fixture 
-        List<Message> sentMessages = generateMessages(4, 200, 2, getFeeds(), m->m).get(10, TimeUnit.SECONDS).collect(Collectors.toList());
+        List<Message> sentMessages = generateMessages(4, 200, 2, getFeeds(), m->m).get(getTimeout(), TimeUnit.SECONDS).collect(Collectors.toList());
          // necessary because the latch countdown happens before the message is added to the send message map.
          // this isn't the idea solution but it's only test code.
         assertThat(sentMessages.size(), equalTo(800));
@@ -124,14 +134,17 @@ public class TestFeedService {
         
         Instant start = Instant.now();
 
+        final int SEND_COUNT = env.getProperty("test.TestFeedService.testMessageRoundtripMultipleThreads.SEND_COUNT", Integer.class);   
+        final int THREADS = 8;
+        
         // 8 threads each writing 20 messages split across 4 feeds
-        CompletableFuture<Stream<Message>> sentMessages = generateMessages(8, 20, 2, getFeeds(), this::post); 
+        CompletableFuture<Stream<Message>> sentMessages = generateMessages(THREADS, SEND_COUNT, 2, getFeeds(), this::post); 
         List<FeedPath> feeds = getFeeds();
         // 8 receivers split across 4 feeds, each should receive all the messages sent to a single feed.
         try {
-            List<Receiver> receivers = createReceivers(8, service, feeds, start, 40).get(60, TimeUnit.SECONDS);
+            List<Receiver> receivers = createReceivers(THREADS, service, feeds, start, SEND_COUNT * THREADS / feeds.size()).get(getTimeout(), TimeUnit.SECONDS);
 
-            assertThat(receivers.size(), equalTo(8));  
+            assertThat(receivers.size(), equalTo(THREADS));  
             
             List<Message> sentList = sentMessages.get().collect(Collectors.toList());
 
