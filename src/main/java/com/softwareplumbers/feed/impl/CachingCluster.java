@@ -79,7 +79,7 @@ public abstract class CachingCluster implements Cluster {
         public FeedService getFeedService(Cluster cluster, JsonObject credentials, Resolver<FeedService> resolver) {
             if (service == null) {
                 service = resolver.resolve(uri, credentials)
-                    .orElseThrow(()->new RuntimeException("Can't resolve feed service"));
+                    .orElseThrow(()->new RuntimeException("Can't resolve feed service for " + uri));
                 service.setCluster(cluster);
             }
             return service;

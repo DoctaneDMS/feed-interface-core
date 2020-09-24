@@ -54,6 +54,15 @@ public class FilesystemCluster extends CachingCluster {
         }
     }
     
+    public void clean() {
+        try (AutoCloseable lock = lock(UUID.randomUUID())) {
+            fetchAll().map(entry->entry.serviceId).forEach(this::remove);
+        } catch (Exception e) {
+            LOG.warn("Error cleaning cluster dir", e);
+            // nonfatal.
+        }
+    }
+    
     @Override 
     public Stream<RegistryElement> fetchAll() {
         LOG.entry();

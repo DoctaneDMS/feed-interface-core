@@ -95,10 +95,12 @@ public class TestCluster {
         Instant start = Instant.now().minusMillis(10);
         Feed feedA = nodeA.getFeed(path);
         Feed feedB = nodeB.getFeed(path);
+        Feed feedC = nodeC.getFeed(path);
         final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripMonodirectional.SEND_COUNT", Integer.class);
         CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
         CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT);
-        CompletableFuture.allOf(responseMessagesB, sentToA).get(getTimeout(), TimeUnit.SECONDS);
+        CompletableFuture<List<Receiver>> responseMessagesC = TestUtils.createReceivers(1, nodeC, listOfPaths, start, SEND_COUNT);
+        CompletableFuture.allOf(responseMessagesB, responseMessagesC, sentToA).get(getTimeout(), TimeUnit.SECONDS);
         List<Message> allSent = new ArrayList<>();
         sentToA.get().forEach(allSent::add);
         assertThat(allSent.size(), equalTo(SEND_COUNT));
@@ -106,8 +108,13 @@ public class TestCluster {
         assertThat(allReceivedB, hasSize(SEND_COUNT));
         Message lastReceivedB = allReceivedB.get(SEND_COUNT - 1);
         assertMatch(allSent.stream(), allReceivedB.stream());
+        List<Message> allReceivedC = responseMessagesC.get().get(0).messages.collect(Collectors.toList());
+        assertThat(allReceivedC, hasSize(SEND_COUNT));
+        Message lastReceivedC = allReceivedC.get(SEND_COUNT - 1);
+        assertMatch(allSent.stream(), allReceivedB.stream());
         Thread.sleep(100);
         assertNoMore(nodeB, feedB, lastReceivedB);
+        assertNoMore(nodeC, feedC, lastReceivedC);
     }    
 
     @Test

@@ -73,12 +73,13 @@ public class LocalConfig {
         @Qualifier("resolverClusters") Resolver<Cluster> resolverClusters,
         @Qualifier("testSimpleClusterNodeA") FeedService nodeA
     ) throws IOException {        
-        Cluster cluster = new FilesystemCluster(
+        FilesystemCluster cluster = new FilesystemCluster(
             Executors.newFixedThreadPool(4), 
             Paths.get(env.getProperty("installation.root")).resolve("cluster"), 
             resolverFeeds, 
             resolverClusters
         );
+        cluster.clean();
         cluster.register(nodeA, TEST_URI_A);
         cluster.register(TEST_UUID_C, TEST_URI_C);
         return cluster;
