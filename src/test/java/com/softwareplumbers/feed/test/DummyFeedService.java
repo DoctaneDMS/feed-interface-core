@@ -17,8 +17,8 @@ import java.util.concurrent.Executors;
  */
 public class DummyFeedService extends BufferingFeedService {
     
-    public DummyFeedService(long poolSize, int bucketSize) {
-        super(UUID.randomUUID(), Executors.newScheduledThreadPool(5), new MessageClock(), new BufferPool(poolSize), bucketSize);
+    public DummyFeedService(UUID id, long poolSize, int bucketSize) {
+        super(id, Executors.newScheduledThreadPool(5), new MessageClock(), new BufferPool(poolSize), bucketSize);
     }
 
     @Override

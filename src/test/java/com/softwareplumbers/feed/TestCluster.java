@@ -53,8 +53,14 @@ public class TestCluster {
     @Autowired @Qualifier(value="testSimpleClusterNodeB")
     protected FeedService nodeB;
 
+    @Autowired @Qualifier(value="testSimpleClusterNodeB")
+    protected FeedService nodeC;
+
     @Autowired @Qualifier(value="testSimpleCluster")
     protected Cluster cluster;
+
+    @Autowired @Qualifier(value="remoteSimpleCluster")
+    protected Cluster remote;
     
     @Autowired
     protected Environment env;
@@ -69,16 +75,10 @@ public class TestCluster {
         return value == null ? 20 : value;
     }
 
-    protected void pauseAfter() throws InterruptedException {
-        Long value = env.getProperty("test.TestCluster.PAUSE_AFTER", Long.class);
-        Thread.sleep(value == null ? 500 : value);
-    }
-        
     @Test
     public void testMessageRoundtripSingleThread() throws IOException, FeedExceptions.InvalidPath, InterruptedException, TimeoutException {
         FeedPath path = randomFeedPath();
-        Instant start = Instant.now();
-        Thread.sleep(10);
+        Instant start = Instant.now().minusMillis(10);
         Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
         Feed feedA = nodeA.getFeed(path);
         final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripSingleThread.SEND_COUNT", Integer.class);
@@ -86,15 +86,13 @@ public class TestCluster {
         assertThat(sentMessages.size(), equalTo(SEND_COUNT));
         Stream<Message> responseMessages = TestUtils.createReceiver(0, nodeB, SEND_COUNT, path, start);
         TestUtils.assertMatch(sentMessages.stream(), responseMessages);
-        pauseAfter();
     }
     
     @Test
     public void testMessageRoundtripMonodirectional() throws IOException, FeedExceptions.InvalidPath, InterruptedException, ExecutionException, TimeoutException {
         FeedPath path = randomFeedPath();
         List<FeedPath> listOfPaths = Collections.singletonList(path);
-        Instant start = Instant.now();
-        Thread.sleep(10);
+        Instant start = Instant.now().minusMillis(10);
         Feed feedA = nodeA.getFeed(path);
         Feed feedB = nodeB.getFeed(path);
         final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripMonodirectional.SEND_COUNT", Integer.class);
@@ -110,15 +108,13 @@ public class TestCluster {
         assertMatch(allSent.stream(), allReceivedB.stream());
         Thread.sleep(100);
         assertNoMore(nodeB, feedB, lastReceivedB);
-        pauseAfter();
     }    
 
     @Test
     public void testMessageRoundtripBidirectional() throws IOException, FeedExceptions.InvalidPath, InterruptedException, ExecutionException, TimeoutException {
         FeedPath path = randomFeedPath();
         List<FeedPath> listOfPaths = Collections.singletonList(path);
-        Instant start = Instant.now();
-        Thread.sleep(10);
+        Instant start = Instant.now().minusMillis(10);
         Feed feedA = nodeA.getFeed(path);
         Feed feedB = nodeB.getFeed(path);
         final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", Integer.class);
@@ -126,7 +122,8 @@ public class TestCluster {
         CompletableFuture<Stream<Message>> sentToB = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeB, feedB, message));
         CompletableFuture<List<Receiver>> responseMessagesA = TestUtils.createReceivers(1, nodeA, listOfPaths, start, SEND_COUNT * 2);
         CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT * 2);
-        CompletableFuture.allOf(responseMessagesA, responseMessagesB, sentToA, sentToB).get(getTimeout(), TimeUnit.SECONDS);
+        CompletableFuture<List<Receiver>> responseMessagesC = TestUtils.createReceivers(1, nodeC, listOfPaths, start, SEND_COUNT * 2);
+        CompletableFuture.allOf(responseMessagesA, responseMessagesB, responseMessagesC, sentToA, sentToB).get(getTimeout(), TimeUnit.SECONDS);
         ArrayList<Message> allSent = new ArrayList<>();
         sentToA.get().forEach(allSent::add);
         sentToB.get().forEach(allSent::add);
@@ -142,7 +139,6 @@ public class TestCluster {
         Thread.sleep(100);
         assertNoMore(nodeA, feedA, lastReceivedA);
         assertNoMore(nodeB, feedB, lastReceivedB);
-        pauseAfter();
     }
     
     @Test 
@@ -150,9 +146,9 @@ public class TestCluster {
         System.out.println("testDumpState");
         try (PrintWriter writer = new PrintWriter(System.out)) {
             cluster.dumpState(writer);
+            remote.dumpState(writer);
             nodeA.dumpState(writer);
             nodeB.dumpState(writer);
         }
-        pauseAfter();
     }
 }

@@ -34,10 +34,11 @@ test {
     systemProperty "test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", 500
     systemProperty "test.TestCluster.testMessageRoundtripMonodirectional.SEND_COUNT", 500
     systemProperty "test.TestCluster.testMessageRoundtripSingleThread.SEND_COUNT", 500
-    systemProperty "test.TestCluster.TIMEOUT", 10
-    systemProperty "test.TestCluster.PAUSE_AFTER", 500
+    systemProperty "test.TestCluster.TIMEOUT", 20
     testLogging {
         events "passed", "skipped", "failed"
+        outputs.upToDateWhen {false}
+        showStandardStreams = true          
     }
 }
 

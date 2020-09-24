@@ -11,7 +11,7 @@
     <root level="INFO">
         <appender-ref ref="Console" />
     </root>
-    <logger name="com.softwareplumbers.feed" level="TRACE"/>
+    <logger name="com.softwareplumbers.feed" level="INFO"/>
     <logger name="com.softwareplumbers.feed.impl" level="TRACE"/>
-    <logger name="com.softwareplumbers.feed.impl.buffer" level="TRACE"/>
+    <logger name="com.softwareplumbers.feed.impl.buffer" level="INFO"/>
 </configuration>
