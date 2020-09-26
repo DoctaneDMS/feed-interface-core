@@ -124,6 +124,10 @@ public class MessageBuffer {
         return Optional.ofNullable(bucketCache.firstEntry()).flatMap(entry->entry.getValue().firstTimestamp());
     }
     
+    public Optional<Instant> lastTimestamp() {
+        return Optional.ofNullable(bucketCache.lastEntry()).flatMap(entry->entry.getValue().lastTimestamp());
+    }
+    
     /** Get messages after a given timestamp.
      * 
      * Concurrency is per ConcurrentSkipListMap - the Message iterator should contain

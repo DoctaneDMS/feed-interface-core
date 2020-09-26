@@ -150,6 +150,10 @@ class Bucket {
         return timeIndex.isEmpty() ? Optional.empty() : Optional.of(timeIndex.firstKey());
     }
     
+    Optional<Instant> lastTimestamp() {
+        return timeIndex.isEmpty() ? Optional.empty() : Optional.of(timeIndex.lastKey());        
+    }
+    
     boolean isEmpty() {
         return timeIndex.isEmpty();
     }

@@ -8,22 +8,33 @@ package com.softwareplumbers.feed.impl;
 import com.softwareplumbers.feed.Cluster;
 import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedService;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import javax.json.Json;
+import javax.json.JsonObjectBuilder;
 import javax.json.JsonReader;
+import javax.json.JsonString;
 import javax.json.JsonWriter;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
@@ -32,87 +43,33 @@ import org.slf4j.ext.XLoggerFactory;
  *
  * @author jonathan essex
  */
-public class FilesystemCluster extends CachingCluster {
+public class FilesystemCluster extends AbstractCluster {
     
     private static final XLogger LOG = XLoggerFactory.getXLogger(FilesystemCluster.class);
-    static final Pattern FILENAME_MATCH_TEMPLATE = Pattern.compile("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}");
-    private final Path clusterDir;
     
-    public FilesystemCluster(ExecutorService executor, Path clusterDir, Resolver<FeedService> feedServiceResolver, Resolver<Cluster> clusterResolver) throws IOException {
-        super(executor, feedServiceResolver, clusterResolver);
-        this.clusterDir = clusterDir;
-        Files.createDirectories(clusterDir);
-    }
-    
-    @Override
-    public RegistryElement fetch(UUID remote) {
-        LOG.entry(remote);
-        try (InputStream is = Files.newInputStream(clusterDir.resolve(remote.toString())); JsonReader reader = Json.createReader(is)) {
-            return LOG.exit(RegistryElement.fromJson(reader.readObject()));
-        } catch (IOException ioe) {
-            throw FeedExceptions.runtime(ioe);
-        }
-    }
-    
-    public void clean() {
-        try (AutoCloseable lock = lock(UUID.randomUUID())) {
-            fetchAll().map(entry->entry.serviceId).forEach(this::remove);
-        } catch (Exception e) {
-            LOG.warn("Error cleaning cluster dir", e);
-            // nonfatal.
-        }
-    }
-    
-    @Override 
-    public Stream<RegistryElement> fetchAll() {
-        LOG.entry();
-        try {
-        return LOG.exit(
-            Files.list(clusterDir)
-                .map(path->path.getFileName().toString())
-                .peek(filename->LOG.trace("registry entry: {}", filename))
-                .filter(filename->FILENAME_MATCH_TEMPLATE.matcher(filename).matches())
-                .map(filename->fetch(UUID.fromString(filename)))
-        );
-        } catch (IOException ioe) {
-            throw FeedExceptions.runtime(ioe);
-        }
-    }
-    
+    private static class HostStatusFile implements StatusMap {
 
-    @Override
-    public void save(RegistryElement element) {
-        LOG.entry(element);
-        try (OutputStream os = Files.newOutputStream(clusterDir.resolve(element.serviceId.toString())); JsonWriter writer = Json.createWriter(os)) {
-            writer.writeObject(element.toJson());
-            LOG.exit();
-        } catch (IOException ioe) {
-            throw LOG.throwing(FeedExceptions.runtime(ioe));
-        }
-    }
-    
-    @Override 
-    public void remove(UUID id) {
-        LOG.entry(id);
-        try {
-            Files.deleteIfExists(clusterDir.resolve(id.toString()));
-        } catch(IOException ioe) {
-            throw LOG.throwing(FeedExceptions.runtime(ioe));            
-        }
-        LOG.exit();
-    }
-    
-    private static class Lock implements AutoCloseable {
         public final FileChannel channel;
         public final FileLock lock;
+        public final Map<URI,HostStatus> content = new ConcurrentHashMap<>();
+        public static final Lock localLock = new ReentrantLock();
         
-        public Lock(Path clusterDir, UUID serverId) {
-            LOG.entry(clusterDir, serverId);
+        public HostStatusFile(Path path) {
+            LOG.entry(path);
             try {
-            channel = FileChannel.open(clusterDir.resolve("lock"), StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+                channel = FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
                 try {
+                    localLock.lock();
                     lock = channel.lock();
-                    channel.write(ByteBuffer.wrap(serverId.toString().getBytes()));
+                    ByteBuffer buffer = ByteBuffer.allocate(10000);
+                    while (channel.read(buffer) >= 0) {                            
+                    }
+                    content.clear();
+                    if (buffer.position() > 0) {
+                        try (ByteArrayInputStream bis = new ByteArrayInputStream(buffer.array()); JsonReader reader = Json.createReader(bis)) {
+                            reader.readObject().forEach((k,v)->content.put(URI.create(k), HostStatus.valueOf(((JsonString)v).getString())));
+                        }
+                    } 
                     LOG.exit();
                 } catch (IOException ioe) {
                     channel.close();
@@ -120,22 +77,56 @@ public class FilesystemCluster extends CachingCluster {
                 }
             } catch (IOException ioe) {
                 throw LOG.throwing(new RuntimeException(ioe));                
-            }
+            }            
+        }
+        
+        @Override
+        public void setStatus(URI host, HostStatus status) {
+            LOG.entry(host, status);
+            content.put(host, status);
+            LOG.exit();
         }
 
         @Override
-        public void close() throws Exception {
+        public HostStatus getStatus(URI host) {
+            LOG.entry(host);
+            return LOG.exit(content.get(host));
+        }
+
+        @Override
+        public Stream<StatusMap.Entry> getEntries() {
             LOG.entry();
-            lock.release();
-            channel.close();
-            LOG.exit();
+            return LOG.exit(content.entrySet().stream().map(entry->new StatusMap.Entry(entry.getKey(), entry.getValue())));
+        }
+
+        @Override
+        public void close() throws IOException {
+            LOG.entry();
+            try {  
+                channel.position(0);
+                try (ByteArrayOutputStream bos = new ByteArrayOutputStream(); JsonWriter writer = Json.createWriter(bos)) {
+                    JsonObjectBuilder builder = Json.createObjectBuilder();
+                    content.forEach((k,v)->builder.add(k.toString(), v.toString()));
+                    writer.writeObject(builder.build());
+                    channel.write(ByteBuffer.wrap(bos.toByteArray()));
+                }
+                channel.force(true);
+                lock.release();
+                localLock.unlock();
+                channel.close();
+                LOG.exit();
+            } catch (IOException ioe) {
+                lock.release();
+                localLock.unlock();
+                channel.close();
+                throw LOG.throwing(new RuntimeException(ioe));
+            }
         }
         
     }
     
-    @Override
-    public AutoCloseable lock(UUID serverId) {
-        LOG.entry(serverId);
-        return LOG.exit(new Lock(clusterDir, serverId));
-    }    
+    public FilesystemCluster(ExecutorService executor, Path clusterStatus, URI localUri, Resolver<Host> clusterResolver) throws IOException {
+        super(executor, localUri, clusterResolver, ()->new HostStatusFile(clusterStatus));
+        Files.createDirectories(clusterStatus.getParent());
+    }
 }

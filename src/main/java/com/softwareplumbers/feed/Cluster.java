@@ -17,7 +17,7 @@ import java.util.stream.Stream;
  *
  * @author Jonathan Essex
  */
-public interface Cluster extends AutoCloseable {
+public interface Cluster extends AutoCloseable, FeedServiceManager {
     
     public static class Filters {
         
@@ -35,9 +35,48 @@ public interface Cluster extends AutoCloseable {
             }
         }
         
-        public static Predicate<FeedService> idIsNot(UUID id) { return new IdIsNot(id); }
-        
+        public static Predicate<FeedService> idIsNot(UUID id) { return new IdIsNot(id); }     
     }
+
+    /** Encapsulates an interface to a remote host */
+    public static interface Host {
+        
+        /** Set up replication in one direction between two feed services in the cluster 
+         * 
+         * @param to Feed service receiving messages
+         * @param from Feed service supplying messages
+         */
+        void replicate(UUID to, UUID from);
+        void closeReplication(UUID service);
+        Stream<FeedService> getLocalServices();
+        public void dumpState(PrintWriter out);
+    }  
+        
+    public static interface LocalHost extends Host, FeedServiceManager {
+        
+        /** Register a local service with this cluster.
+         * 
+         * Typically a Cluster implementation is a local facade over some network service (e.g. 
+         * the Kubernetes API server) and not a service in its own right. This method is called
+         * to register some local service as a node on the cluster, effectively advertising the
+         * local node on the provided URI. (The user is responsible for ensuring the service
+         * actually responds to the given URI)
+         * 
+         * This method should be called once the given service is ready to start serving requests.
+         * Implementers of the cluster interface are responsible for ensuring that a call to 
+         * register(...) ultimately results in a call to the init method of the service being 
+         * registered (which provides information about the cluster to the service), and that
+         * replicate will be called as appropriate to set up replication between the new node
+         * and existing nodes in the cluster.
+         * 
+         * @param service Local service to register
+         */        
+    }
+    
+    public LocalHost getLocalHost();
+    
+    /** Get all hosts in the cluster, localhost first */
+    public Stream<Host> getHosts();
     
     /** Get the service endpoint for the cluster node identified by the supplied id
      * 
@@ -53,38 +92,17 @@ public interface Cluster extends AutoCloseable {
      * @param filters Filter which service objects we want to see.
      * @return A stream of FeedService objects, any of which can be used to access feeds in this cluster.
      */
-    Stream<FeedService> getServices(Predicate<FeedService>... filters);
+    default Stream<FeedService> getServices(Predicate<FeedService>... filters) {
+        return getHosts().flatMap(Host::getLocalServices).filter(Stream.of(filters).reduce(x->true, Predicate::and));
+    }
     
-    /** Register a local service with this cluster.
-     * 
-     * Typically a Cluster implementation is a local facade over some network service (e.g. 
-     * the Kubernetes API server) and not a service in its own right. This method is called
-     * to register some local service as a node on the cluster, effectively advertising the
-     * local node on the provided URI. (The user is responsible for ensuring the service
-     * actually responds to the given URI)
-     * 
-     * This method should be called once the given service is ready to start serving requests.
-     * Implementers of the cluster interface are responsible for ensuring that a call to 
-     * register(...) ultimately results in a call to the init method of the service being 
-     * registered (which provides information about the cluster to the service), and that
-     * replicate will be called as appropriate to set up replication between the new node
-     * and existing nodes in the cluster.
-     * 
-     * @param service Local service to register
-     * @param endpoint endpoint on which the local service handles remote requests
-     */
-    void register(FeedService service, URI endpoint);
+    default Stream<FeedService> getCachedServices(Predicate<FeedService>... filters) {
+        return getServices(filters);
+    }
     
-    void register(UUID serverId, URI endpoint);
-    
-    void deregister(FeedService service);
-    
-    /** Set up replication in one direction between two feed services in the cluster 
-     * 
-     * @param to Feed service receiving messages
-     * @param from Feed service supplying messages
-     */
-    void replicate(UUID to, UUID from);
     
     void dumpState(PrintWriter out);
+    
+    @Override
+    default Cluster getCluster() { return this; }
 }

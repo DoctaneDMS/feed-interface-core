@@ -15,6 +15,7 @@ package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
+import com.softwareplumbers.feed.FeedExceptions.InvalidState;
 import java.io.PrintWriter;
 import java.time.Instant;
 import java.util.Optional;
@@ -58,15 +59,31 @@ public interface FeedService extends AutoCloseable {
      */
     CompletableFuture<MessageIterator> watch(UUID watcherServerId, Instant after, long timeoutMillis);
        
-    /** Provides cluster details to the feed service.
+    /** Provides cluster or host details to the feed service.
      * 
-     * A feed service is registered to a cluster with Cluster.register(service). Later,
-     * the cluster will call back FeedService.setCluster(cluster)
+     * A feed service is registered to a cluster or a host with FeedServiceManager.register(service). Later,
+     * the manager object will call back with setManager. close() should ultimately call manager.deregister(service).
      * 
-     * @param cluster 
+     * It's okay to use a FeedService without ever registering it with a manager. However the manager provides the
+     * link to other replicated hosts. When a feed service is registered at 'Cluster' level, the assumption is that
+     * the service has some kind of shared persistent state backing it so that we are registering the 'same' service
+     * with every host in the cluster. Replication is not needed between services that share state in this way.
+     * 
+     * If however the service is registered at the host level, it is considered that this service uses host-local
+     * storage (or has no persistent storage). Replication needs to be managed between host-registered nodes and
+     * other nodes on the cluster.
+     * 
+     * @param manager 
      */
-    void setCluster(Cluster cluster);
-        
+    void setManager(FeedServiceManager manager);
+    
+    /** Returns the time at which the feed services was initialized.
+     * 
+     * A feed service will never have any local messages with a timestamp
+     * less than or equal to the init time.
+     * 
+     * @return 
+     */
     Instant getInitTime();
     
     /** Get all messages sharing the given message Id.
@@ -159,19 +176,20 @@ public interface FeedService extends AutoCloseable {
     
     /** Sent a message to a feed.
      * 
-     * The service will ignore any timestamp, serverId, or message id specified in the 
-     * message. The returned message is an ACK containing (at least) the generated 
-     * message id, timestamp, and serverId (which will be the same as that returned by
-     * this.getServerId).
+     * The service will ignore any timestamp, serverId, or message id specified in the message.
+     * 
+     * The returned message is an ACK containing (at least) the generated  message id, timestamp,
+     * and serverId (which will be the same as that returned by this.getServerId).
      * 
      * @param path Path of feed to send message to.
      * @param message
      * @return An ack message with updated timestamp, name, and id
-     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
+     * @throws InvalidPath 
+     * @throws InvalidState 
      */
-    Message post(FeedPath path, Message message) throws InvalidPath;
+    Message post(FeedPath path, Message message) throws InvalidPath, InvalidState;
     
-    Message replicate(Message message);
+    Message replicate(Message message) throws InvalidState;
     
     /** Get the Id of this server instance.
      * 
@@ -196,6 +214,22 @@ public interface FeedService extends AutoCloseable {
     public Feed getFeed(FeedPath path) throws InvalidPath;
     
     public Stream<Feed> getFeeds();
+    
+    /** Get the most recent message available here.
+     * 
+     * Typically used to bootstrap listening to a feed when we don't care about 
+     * old messages. This should return the timestamp of the most message available 
+     * locally (it won't go out to the cluster to look for more recent messages). 
+     * 
+     * If Optional.empty is returned, this implies there is no message available 
+     * locally on this feed. In this case, the user should use the value returned
+     * by getInitTime.
+     * 
+     * @param path
+     * @return The
+     * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
+     */
+    public Optional<Instant> getLastTimestamp(FeedPath path) throws InvalidPath;
     
     public void dumpState(PrintWriter out);
 }

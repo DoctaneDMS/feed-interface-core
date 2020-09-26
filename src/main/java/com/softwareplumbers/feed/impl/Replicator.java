@@ -12,7 +12,14 @@ import java.io.PrintWriter;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
 
@@ -30,11 +37,12 @@ class Replicator {
     private long receivedCount = 0;
     private long errorCount = 0;
     private boolean closed;
-    private long timeoutMillis = 10000;
+    private final long timeoutMillis = 10000;
     private Instant pollingFrom;
-    private ExecutorService callbackExecutor;
+    private final ExecutorService callbackExecutor;
+    private CompletableFuture<?> watcher;
 
-    private void monitorCallback(MessageIterator messages, Throwable exception) {
+    private void handleMessages(MessageIterator messages, Throwable exception) {
         LOG.entry(messages, exception);
         if (exception != null) {
             LOG.error("Error monitoring {}", from.getServerId(), exception);
@@ -52,8 +60,10 @@ class Replicator {
                     to.replicate(message);
                 }
                 messages.close();
-                if (!closed) {
-                    from.watch(to.getServerId(), pollingFrom, timeoutMillis).whenCompleteAsync(this::monitorCallback, callbackExecutor);
+                synchronized(this) {
+                    if (!closed) {
+                        watcher = from.watch(to.getServerId(), pollingFrom, timeoutMillis).whenCompleteAsync(this::handleMessages, callbackExecutor);
+                    }
                 }
             } catch (Exception exp) {
                 LOG.error("Error monitoring {}", from.getServerId(), exp);
@@ -75,11 +85,25 @@ class Replicator {
     }
 
     public void close() {
-        closed = true;
+        
+        CompletableFuture<?> waitOn;
+        
+        synchronized(this) {
+            closed = true;
+            waitOn = watcher;
+        }
+        
+        try {
+            waitOn.get(timeoutMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException ex) {
+            throw new RuntimeException(ex);
+        }
     }
+    
+
 
     public void startMonitor() {
-        from.watch(to.getServerId(), to.getInitTime(), timeoutMillis).whenComplete(this::monitorCallback);
+        watcher = from.watch(to.getServerId(), to.getInitTime(), timeoutMillis).whenComplete(this::handleMessages);
     }
 
     public void dumpState(PrintWriter out) {
@@ -99,12 +123,16 @@ class Replicator {
     public FeedService getTo() {
         return to;
     }
-
+    
     public boolean equals(Replicator other) {
         return to.getServerId().equals(other.to.getServerId()) && from.getServerId().equals(other.from.getServerId());
     } 
     
     public boolean equals(Object other) {
         return other instanceof Replicator && equals((Replicator)other);
+    }
+    
+    public boolean touches(UUID serviceId) {
+        return from.getServerId().equals(serviceId) || to.getServerId().equals(serviceId);
     }
 }

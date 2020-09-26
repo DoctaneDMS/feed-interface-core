@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import com.softwareplumbers.feed.FeedExceptions.InvalidState;
 import com.softwareplumbers.feed.test.TestUtils;
 import com.softwareplumbers.feed.test.TestUtils.Receiver;
 import static com.softwareplumbers.feed.test.TestUtils.assertMatch;
@@ -70,8 +71,12 @@ public class TestCluster {
     protected Environment env;
     
     public static Message post(FeedService service, Feed feed, Message message) {
-        Message ack = feed.post(service, message); 
-        return message.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get()); 
+        try {
+            Message ack = feed.post(service, message); 
+            return message.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get()); 
+        } catch (InvalidState ex) {
+            throw new RuntimeException(ex);
+        }
     }
     
     protected long getTimeout() {
@@ -166,10 +171,10 @@ public class TestCluster {
     public void testDumpState() throws InterruptedException {
         System.out.println("testDumpState");
         try (PrintWriter writer = new PrintWriter(System.out)) {
+            writer.println("'local' cluster");
             cluster.dumpState(writer);
+            writer.println("'remote' cluster");
             remote.dumpState(writer);
-            nodeA.dumpState(writer);
-            nodeB.dumpState(writer);
         }
     }
 }

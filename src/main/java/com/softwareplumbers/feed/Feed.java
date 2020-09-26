@@ -50,7 +50,7 @@ public interface Feed {
      * @param message Sent message
      * @return 
      */
-    default Message post(FeedService service, Message message) {
+    default Message post(FeedService service, Message message) throws FeedExceptions.InvalidState {
         try {
             return service.post(getName(), message);
         } catch (FeedExceptions.InvalidPath e) {
@@ -58,7 +58,7 @@ public interface Feed {
         }        
     }
     
-    default Message replicate(FeedService service, Message message) {
+    default Message replicate(FeedService service, Message message) throws FeedExceptions.InvalidState {
         return service.replicate(message);
     }
 
@@ -100,4 +100,13 @@ public interface Feed {
     default MessageIterator search(FeedService service, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Predicate<Message>... filters) {
         return search(service, serverId, from, fromInclusive, to, toInclusive, Optional.of(true), filters);
     }
+    
+    default Optional<Instant> getLastTimestamp(FeedService service) {
+        try {
+            return service.getLastTimestamp(getName());
+        } catch (FeedExceptions.InvalidPath e) {
+            throw new FeedExceptions.BaseRuntimeException(e);
+        }                  
+    } 
+           
 }

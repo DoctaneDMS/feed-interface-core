@@ -16,6 +16,7 @@ import com.softwareplumbers.feed.MessageType;
 import java.io.PrintWriter;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -125,7 +126,6 @@ public abstract class AbstractFeed implements Feed {
         );
     }
     
-    protected abstract Message[] store(Message... message);
     
     /** Handle a message replicated from another cluster node.
      * 
@@ -297,9 +297,6 @@ public abstract class AbstractFeed implements Feed {
         return children.values().stream().flatMap(child->Stream.concat(Stream.of(child), child.getDescendents()));
     }
     
-    public abstract MessageIterator localSearch(FeedService svc, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Predicate<Message>... filters);
-    
-    public abstract boolean hasCompleteData(FeedService svc, Instant from);
     
     @Override
     public MessageIterator search(FeedService svc, UUID serverId, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive,  Optional<Boolean> relay, Predicate<Message>... filters) {
@@ -375,6 +372,17 @@ public abstract class AbstractFeed implements Feed {
         return LOG.exit(result);
     }      
     
+    @Override
+    public Optional<Instant> getLastTimestamp(FeedService service) {
+        return Stream.concat(
+            getMyLastTimestamp(service).map(Stream::of).orElse(Stream.empty()), 
+            getChildren()
+                .map(feed->feed.getMyLastTimestamp(service))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+        ).max(Comparator.naturalOrder());
+    }
+    
     public void dumpState(PrintWriter out) {
         out.write("Feed: ");
         out.write(getName().toString());
@@ -383,4 +391,10 @@ public abstract class AbstractFeed implements Feed {
         out.write(Integer.toString(callbacks.size()));
         out.write("\n");
     }
+    
+    public abstract MessageIterator localSearch(FeedService svc, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Predicate<Message>... filters);
+    public abstract boolean hasCompleteData(FeedService svc, Instant from);
+    protected abstract Message[] store(Message... message);
+    protected abstract Optional<Instant> getMyLastTimestamp(FeedService service);
+    
 }

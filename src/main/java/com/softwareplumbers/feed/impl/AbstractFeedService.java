@@ -10,6 +10,7 @@ import com.softwareplumbers.feed.Feed;
 import com.softwareplumbers.feed.FeedExceptions;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.FeedService;
+import com.softwareplumbers.feed.FeedServiceManager;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
 import java.io.PrintWriter;
@@ -34,15 +35,16 @@ public abstract class AbstractFeedService implements FeedService {
     
     private final ScheduledExecutorService callbackExecutor;
     protected final UUID serverId;
-    protected Optional<Cluster> cluster;
+    protected Optional<FeedServiceManager> manager;
     protected final Instant initTime;
     private final AbstractFeed rootFeed;
     private final long ackTimeout = 600; // 10 minutes
+    private volatile boolean closing = false;
     
     public AbstractFeedService(UUID serverId, ScheduledExecutorService callbackExecutor, Instant initTime, AbstractFeed rootFeed) {
         this.callbackExecutor = callbackExecutor;
         this.serverId = serverId;
-        this.cluster = Optional.empty();
+        this.manager = Optional.empty();
         this.initTime = initTime;          
         this.rootFeed = rootFeed;
     }
@@ -52,17 +54,18 @@ public abstract class AbstractFeedService implements FeedService {
     }
      
     @Override
-    public void setCluster(Cluster cluster) {
-        LOG.entry(cluster);
+    public void setManager(FeedServiceManager manager) {
+        LOG.entry(manager);
         LOG.debug("Initializing feed service {}", this);
-        this.cluster = Optional.of(cluster);
+        this.manager = Optional.of(manager);
         LOG.exit();
     }
     
     @Override
     public void close() throws Exception {
         LOG.entry();
-        cluster.ifPresent(c->c.deregister(this));
+        closing = true;
+        manager.ifPresent(c->c.deregister(this));
         callbackExecutor.shutdown();
         LOG.exit();
     }
@@ -81,7 +84,7 @@ public abstract class AbstractFeedService implements FeedService {
     
     @Override
     public Optional<Cluster> getCluster() {
-        return cluster;
+        return manager.map(FeedServiceManager::getCluster);
     }
     
     @Override
@@ -126,14 +129,16 @@ public abstract class AbstractFeedService implements FeedService {
      * @throws com.softwareplumbers.feed.FeedExceptions.InvalidPath 
      */
     @Override
-    public Message post(FeedPath path, Message message) throws FeedExceptions.InvalidPath {
+    public Message post(FeedPath path, Message message) throws FeedExceptions.InvalidPath, FeedExceptions.InvalidState {
         LOG.entry(path, message);
+        if (closing) throw new FeedExceptions.InvalidState("Feed is closing");
         return LOG.exit(getFeed(path).post(this, message));
     }
     
     @Override
-    public Message replicate(Message message) {
+    public Message replicate(Message message) throws FeedExceptions.InvalidState {
         LOG.entry(message);
+        if (closing) throw new FeedExceptions.InvalidState("Feed is closing");
         try {
             return LOG.exit(getFeed(message.getFeedName()).replicate(this, message));
         } catch (FeedExceptions.InvalidPath e) {
@@ -160,6 +165,11 @@ public abstract class AbstractFeedService implements FeedService {
         String id = path.part.getId().orElseThrow(()->new FeedExceptions.InvalidId(path.parent, path.part.toString()));
         return LOG.exit(getFeed(path.parent).search(this, id, filters));
     }  
+    
+    @Override
+    public Optional<Instant> getLastTimestamp(FeedPath path) throws FeedExceptions.InvalidPath {
+        return getFeed(path).getLastTimestamp(this);
+    }
     
     @Override
     public String toString() {

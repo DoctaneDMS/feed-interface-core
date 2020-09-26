@@ -6,6 +6,7 @@
 package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
+import com.softwareplumbers.feed.FeedExceptions.InvalidState;
 import com.softwareplumbers.feed.test.TestUtils;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +57,7 @@ public class TestFeedService {
             Message ack = service.post(message.getFeedName(), message);
             // This should be the same as the message ultimately received *on the same server as it was posted*
             return message.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get());
-        } catch (InvalidPath e) {
+        } catch (InvalidPath | InvalidState e) {
             throw new RuntimeException(e);
         }
     }

@@ -18,6 +18,7 @@ public class FeedExceptions {
         INVALID_PATH,
         INVALID_JSON,
         INVALID_ID,
+        INVALID_STATE,
         STREAMING_EXCEPTION,
         STORAGE_EXCEPTION
     }
@@ -80,6 +81,28 @@ public class FeedExceptions {
                 return super.buildJson(bldr).add("reason", e.getMessage());
         }    
     }
+    
+    public static class InvalidState extends BaseException {
+
+        public InvalidState(String reason) {
+            super(Type.INVALID_STATE, reason);
+        }
+        public static Optional<String> getReason(JsonObject object) {
+            try {
+                return Optional.of(object.getString("reason"));
+            } catch (Exception e) {
+                return Optional.empty();
+            }
+        }
+        @Override
+        public JsonObjectBuilder buildJson(JsonObjectBuilder bldr) {
+            Throwable e = getCause();
+            if (e == null)
+                return super.buildJson(bldr).add("reason", getMessage());
+            else    
+                return super.buildJson(bldr).add("reason", e.getMessage());
+        }    
+    }    
     
     public static class StorageException extends BaseException {
         public StorageException(Exception e) {
@@ -206,6 +229,8 @@ public class FeedExceptions {
                     return new InvalidId(InvalidId.getPath(json).orElseThrow(()->new InvalidJson("missing path", json)), InvalidId.getId(json).orElseThrow(()->new InvalidJson("missing id", json)));
                 case STREAMING_EXCEPTION:
                     return new StreamingException(StreamingException.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)));
+                case INVALID_STATE:
+                    return new InvalidState(InvalidState.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)));
                 case STORAGE_EXCEPTION:
                     return new StorageException(StorageException.getReason(json).orElseThrow(()->new InvalidJson("missing reason", json)));
                 default:
