@@ -37,6 +37,7 @@ import static org.junit.Assert.fail;
 import org.junit.Test;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.env.Environment;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  *
@@ -44,6 +45,7 @@ import org.springframework.core.env.Environment;
  */
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(classes = { LocalConfig.class })
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class TestFeedService {
 
     @Autowired @Qualifier(value="testService")
