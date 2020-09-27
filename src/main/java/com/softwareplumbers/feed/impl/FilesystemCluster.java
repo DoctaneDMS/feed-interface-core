@@ -5,15 +5,9 @@
  */
 package com.softwareplumbers.feed.impl;
 
-import com.softwareplumbers.feed.Cluster;
-import com.softwareplumbers.feed.FeedExceptions;
-import com.softwareplumbers.feed.FeedService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -22,15 +16,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 import javax.json.Json;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonReader;
@@ -57,6 +47,7 @@ public class FilesystemCluster extends AbstractCluster {
         public HostStatusFile(Path path) {
             LOG.entry(path);
             try {
+                Files.createDirectories(path.getParent());        
                 channel = FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.CREATE);
                 try {
                     localLock.lock();
@@ -127,6 +118,5 @@ public class FilesystemCluster extends AbstractCluster {
     
     public FilesystemCluster(ExecutorService executor, Path clusterStatus, URI localUri, Resolver<Host> clusterResolver) throws IOException {
         super(executor, localUri, clusterResolver, ()->new HostStatusFile(clusterStatus));
-        Files.createDirectories(clusterStatus.getParent());
     }
 }
