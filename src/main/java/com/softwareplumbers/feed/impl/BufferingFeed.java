@@ -52,10 +52,10 @@ public class BufferingFeed extends AbstractFeed {
         return buffer.addMessages(messages);
     }
            
-    private Instant checkpoint() {
+    private Instant checkpoint(FeedService service) {
         return Stream.concat(Stream.of(
                 buffer.checkpoint()), 
-                getChildren().map(feed->((BufferingFeed)feed).checkpoint())
+                getChildren(service).map(feed->((BufferingFeed)feed).checkpoint(service))
             ).min(Comparator.naturalOrder())
             .orElseThrow(()->new RuntimeException("Failed checkpoint"));
     }
@@ -68,7 +68,7 @@ public class BufferingFeed extends AbstractFeed {
     
     @Override
     public MessageIterator localSearch(FeedService svc, Instant from, boolean fromInclusive, Optional<Instant> maybeTo, Optional<Boolean> toInclusive, Predicate<Message>... filters) {
-        Instant to = maybeTo.orElseGet(()->getChildren().findAny().isPresent() ? checkpoint() : Instant.MAX);
+        Instant to = maybeTo.orElseGet(()->getChildren(svc).findAny().isPresent() ? checkpoint(svc) : Instant.MAX);
         return buffer.getMessagesBetween(from, fromInclusive, to, toInclusive.orElse(true), filters);        
     }
     

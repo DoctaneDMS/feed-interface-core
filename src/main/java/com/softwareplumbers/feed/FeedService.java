@@ -212,6 +212,8 @@ public interface FeedService extends AutoCloseable {
     Optional<Cluster> getCluster();
     
     public Feed getFeed(FeedPath path) throws InvalidPath;
+
+    public Stream<Feed> getChildren(FeedPath path) throws InvalidPath;
     
     public Stream<Feed> getFeeds();
     

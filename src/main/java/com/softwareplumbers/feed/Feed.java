@@ -6,12 +6,14 @@
 package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
+import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 import javax.json.Json;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
@@ -126,10 +128,28 @@ public interface Feed {
         }                  
     }
     
-    default JsonObject toJson() {
+    default Stream<Feed> getChildren(FeedService service) {
+        try {
+            return service.getChildren(getName());
+        } catch (FeedExceptions.InvalidPath e) {
+            throw new FeedExceptions.BaseRuntimeException(e);
+        }                          
+    }
+    
+    default JsonObject toJson(FeedService service, int depth) {
         JsonObjectBuilder builder = Json.createObjectBuilder();
         builder.add("name", getName().toString());
         getLastTimestamp().ifPresent(ts -> builder.add("lastTimestamp", ts.toString()));
+        JsonObjectBuilder childrenBuilder = Json.createObjectBuilder();
+        if (depth > 0) {
+            try {
+                Stream<Feed> children = service.getChildren(getName());
+                children.forEach(child->builder.add(child.getName().part.getName().get(), child.toJson(service, depth-1)));
+            } catch (InvalidPath e) {
+                throw FeedExceptions.runtime(e);
+            }
+        }
+        builder.add("children", childrenBuilder);
         return builder.build();
     }
     

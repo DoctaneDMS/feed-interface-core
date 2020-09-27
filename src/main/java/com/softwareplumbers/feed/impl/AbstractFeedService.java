@@ -98,6 +98,11 @@ public abstract class AbstractFeedService implements FeedService {
     }
     
     @Override
+    public Stream<Feed> getChildren(FeedPath path) throws FeedExceptions.InvalidPath {
+        return getFeed(path).getChildren(this);
+    }
+    
+    @Override
     public Feed getFeed(FeedPath path) throws FeedExceptions.InvalidPath {
         return rootFeed.getFeed(this, path);
     }

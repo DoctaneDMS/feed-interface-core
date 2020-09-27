@@ -289,8 +289,8 @@ public abstract class AbstractFeed implements Feed {
         }
     }
 
-    public Stream<AbstractFeed> getChildren() {        
-        return children.values().stream();
+    public Stream<Feed> getChildren(FeedService service) {        
+        return children.values().stream().map(Feed.class::cast);
     }
     
     public Stream<AbstractFeed> getDescendents() {
@@ -336,7 +336,7 @@ public abstract class AbstractFeed implements Feed {
         
         Stream<MessageIterator> feeds = Stream.concat(
             Stream.of(result), 
-            getChildren().map(feed->feed.search(service, serverId, from, fromInclusive, to, toInclusive, relay, filters))
+            getChildren(svc).map(feed->feed.search(service, serverId, from, fromInclusive, to, toInclusive, relay, filters))
         );
         
         result = MessageIterator.merge(feeds);
@@ -376,7 +376,7 @@ public abstract class AbstractFeed implements Feed {
     public Optional<Instant> getLastTimestamp(FeedService service) {
         return Stream.concat(
             getLastTimestamp().map(Stream::of).orElse(Stream.empty()), 
-            getChildren()
+            getChildren(service)
                 .map(feed->feed.getLastTimestamp(service))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
