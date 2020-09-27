@@ -90,6 +90,14 @@ public class TestFilters {
     }
     
     @Test 
+    public void testParseRemoteList() {
+        JsonArray result = Filters.toJson(new Predicate[] { Filters.IS_ACK, Filters.POSTED_LOCALLY, message->true });
+        assertThat(result, Matchers.iterableWithSize(2));
+        assertThat(Filters.using(service).fromJson(result)[0], is(Filters.IS_ACK));
+        assertThat(Filters.using(service).fromJson(result)[1], is(Filters.POSTED_LOCALLY));
+    }
+    
+    @Test 
     public void testLocalList() {
         Predicate<Message>[] result = Filters.local(new Predicate[] { Filters.IS_ACK, Filters.POSTED_LOCALLY, message->true });
         assertThat(result, Matchers.arrayWithSize(1));

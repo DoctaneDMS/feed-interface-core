@@ -180,6 +180,13 @@ public class Filters {
         }        
     }
     
+    public Predicate<Message>[] fromJson(JsonArray predicates) {
+        Predicate<Message>[] result = new Predicate[predicates.size()];
+        for (int i = 0; i < result.length; i++) 
+            result[i] = fromJson(predicates.getJsonObject(i)).orElseThrow(()->new RuntimeException("can't understand predicate"));
+        return result;
+    }
+    
     public static Filters using(FeedService service) { return new Filters(service); }
     
     public Predicate<Message> byRemoteTimestamp(UUID serverId, Instant from, Optional<Instant> to) {
