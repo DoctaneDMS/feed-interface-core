@@ -13,7 +13,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 import javax.json.Json;
+import javax.json.JsonArray;
+import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 
@@ -182,4 +185,19 @@ public class Filters {
     public Predicate<Message> byRemoteTimestamp(UUID serverId, Instant from, Optional<Instant> to) {
         return new ByRemoteTimestamp(serverId, from, to);
     } 
+    
+    public static JsonArray toJson(Predicate<Message>[] predicates) {
+        JsonArrayBuilder builder = Json.createArrayBuilder();
+        Stream.of(predicates)
+            .filter(RemotablePredicate.class::isInstance)
+            .map(RemotablePredicate.class::cast)
+            .forEach(predicate->builder.add(predicate.toJson()));
+        return builder.build();
+    }
+    
+    public static Predicate<Message>[] local(Predicate<Message>[] predicates) {
+        return Stream.of(predicates)
+            .filter(predicate->!(predicate instanceof RemotablePredicate))
+            .toArray(Predicate[]::new);
+    }
 }

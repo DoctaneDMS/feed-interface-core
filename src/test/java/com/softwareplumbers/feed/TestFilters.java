@@ -10,11 +10,13 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
+import javax.json.JsonArray;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.isA;
+import org.hamcrest.Matchers;
+import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -77,5 +79,20 @@ public class TestFilters {
         assertThat(filter, instanceOf(RemotablePredicate.class));
         RemotablePredicate remotable = (RemotablePredicate)filter;
         assertThat(Filters.using(service).fromJson(remotable.toJson()).get(), equalTo(Filters.using(service).byRemoteTimestamp(test, now, Optional.empty())));
+    }  
+    
+    @Test 
+    public void testRemoteList() {
+        JsonArray result = Filters.toJson(new Predicate[] { Filters.IS_ACK, Filters.POSTED_LOCALLY, message->true });
+        assertThat(result, Matchers.iterableWithSize(2));
+        assertThat(Filters.using(service).fromJson(result.getJsonObject(0)).get(), is(Filters.IS_ACK));
+        assertThat(Filters.using(service).fromJson(result.getJsonObject(1)).get(), is(Filters.POSTED_LOCALLY));
+    }
+    
+    @Test 
+    public void testLocalList() {
+        Predicate<Message>[] result = Filters.local(new Predicate[] { Filters.IS_ACK, Filters.POSTED_LOCALLY, message->true });
+        assertThat(result, Matchers.arrayWithSize(1));
+        assertTrue(result[0].test(null));
     }    
 }
