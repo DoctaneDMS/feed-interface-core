@@ -89,7 +89,7 @@ public class BufferingFeed extends AbstractFeed {
     }
 
     @Override
-    public Feed setLastTimestamp(Instant lastTimestamp) {
-        return new FeedImpl(getName(), Optional.of(lastTimestamp));
+    public Feed setLastTimestamp(Optional<Instant> lastTimestamp) {
+        return new FeedImpl(getName(), lastTimestamp);
     }
 }

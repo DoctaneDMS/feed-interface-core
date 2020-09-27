@@ -40,7 +40,7 @@ public interface Feed {
      */
     Optional<Instant> getLastTimestamp();
     
-    Feed setLastTimestamp(Instant instant);
+    Feed setLastTimestamp(Optional<Instant> instant);
     
     /** Convenience method for receiving messages related to this feed.
      * 

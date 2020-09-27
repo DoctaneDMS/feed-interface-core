@@ -26,8 +26,8 @@ public class FeedImpl implements Feed {
     }
     
     @Override
-    public Feed setLastTimestamp(Instant lastTimestamp) {
-        return new FeedImpl(name, Optional.of(lastTimestamp));
+    public Feed setLastTimestamp(Optional<Instant> lastTimestamp) {
+        return new FeedImpl(name, lastTimestamp);
     }
 
     @Override
