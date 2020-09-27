@@ -40,6 +40,8 @@ public interface Feed {
      */
     Optional<Instant> getLastTimestamp();
     
+    Feed setLastTimestamp(Instant instant);
+    
     /** Convenience method for receiving messages related to this feed.
      * 
      * Should be the same as calling service.listen(this.getName(), from, serverId)

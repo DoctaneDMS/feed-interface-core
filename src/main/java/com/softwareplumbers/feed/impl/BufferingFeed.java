@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed.impl;
 
+import com.softwareplumbers.feed.Feed;
 import com.softwareplumbers.feed.FeedService;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageIterator;
@@ -76,12 +77,19 @@ public class BufferingFeed extends AbstractFeed {
         return buffer.firstTimestamp().map(first->!first.isAfter(from)).orElse(false);
     }
         
+    @Override
     public void dumpState(PrintWriter out) {
         super.dumpState(out);
         buffer.dumpState(out);        
     }
     
+    @Override
     public Optional<Instant> getLastTimestamp() {
         return buffer.lastTimestamp();
+    }
+
+    @Override
+    public Feed setLastTimestamp(Instant lastTimestamp) {
+        return new FeedImpl(getName(), Optional.of(lastTimestamp));
     }
 }

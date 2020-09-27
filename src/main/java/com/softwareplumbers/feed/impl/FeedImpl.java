@@ -24,6 +24,11 @@ public class FeedImpl implements Feed {
         this.name = name;
         this.lastTimestamp = lastTimestamp;
     }
+    
+    @Override
+    public Feed setLastTimestamp(Instant lastTimestamp) {
+        return new FeedImpl(name, Optional.of(lastTimestamp));
+    }
 
     @Override
     public FeedPath getName() {
