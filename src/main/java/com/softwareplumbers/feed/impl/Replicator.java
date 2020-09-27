@@ -37,7 +37,7 @@ class Replicator {
     private long receivedCount = 0;
     private long errorCount = 0;
     private boolean closed;
-    private final long timeoutMillis = 10000;
+    private final long timeoutMillis = 5000;
     private Instant pollingFrom;
     private final ExecutorService callbackExecutor;
     private CompletableFuture<?> watcher;
@@ -85,7 +85,7 @@ class Replicator {
     }
 
     public void close() {
-        
+        LOG.entry();
         CompletableFuture<?> waitOn;
         
         synchronized(this) {
@@ -98,6 +98,7 @@ class Replicator {
         } catch (InterruptedException | ExecutionException | TimeoutException ex) {
             throw new RuntimeException(ex);
         }
+        LOG.exit();
     }
     
 

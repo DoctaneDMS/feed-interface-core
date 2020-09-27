@@ -243,13 +243,13 @@ public abstract class AbstractFeed implements Feed {
                 if (nextTimeout != null) nextTimeout.cancel(false);
                 service.schedule(
                     ()->{
-                        timeout(service);
                         scheduleTimeout(service, timeout(service));
                     }, 
                     deadlineMillis
                 );
             }
         }
+        LOG.exit();
     }
 
     @Override

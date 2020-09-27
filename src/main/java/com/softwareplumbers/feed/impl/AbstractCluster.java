@@ -72,10 +72,12 @@ public abstract class AbstractCluster implements Cluster {
 
         @Override
         public void closeReplication(UUID service) {
+            LOG.entry(service);
             replicators.stream()
                 .filter(replicator->replicator.touches(service)).forEach(Replicator::close);
             replicators
                 .removeIf(replicator->replicator.touches(service));        
+            LOG.exit();
         }
 
         @Override
@@ -102,6 +104,8 @@ public abstract class AbstractCluster implements Cluster {
             UUID serverId = service.getServerId();
             synchronized(this) {
                 localServices.remove(serverId);
+                closeReplication(serverId);
+                getHosts().forEach(host->host.closeReplication(serverId));
             }
             LOG.exit();
         }
