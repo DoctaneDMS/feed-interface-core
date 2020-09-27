@@ -81,7 +81,7 @@ public class BufferingFeed extends AbstractFeed {
         buffer.dumpState(out);        
     }
     
-    public Optional<Instant> getMyLastTimestamp(FeedService service) {
+    public Optional<Instant> getLastTimestamp() {
         return buffer.lastTimestamp();
     }
 }

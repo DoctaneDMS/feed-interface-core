@@ -375,9 +375,9 @@ public abstract class AbstractFeed implements Feed {
     @Override
     public Optional<Instant> getLastTimestamp(FeedService service) {
         return Stream.concat(
-            getMyLastTimestamp(service).map(Stream::of).orElse(Stream.empty()), 
+            getLastTimestamp().map(Stream::of).orElse(Stream.empty()), 
             getChildren()
-                .map(feed->feed.getMyLastTimestamp(service))
+                .map(feed->feed.getLastTimestamp(service))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
         ).max(Comparator.naturalOrder());
@@ -394,7 +394,5 @@ public abstract class AbstractFeed implements Feed {
     
     public abstract MessageIterator localSearch(FeedService svc, Instant from, boolean fromInclusive, Optional<Instant> to, Optional<Boolean> toInclusive, Predicate<Message>... filters);
     public abstract boolean hasCompleteData(FeedService svc, Instant from);
-    protected abstract Message[] store(Message... message);
-    protected abstract Optional<Instant> getMyLastTimestamp(FeedService service);
-    
+    protected abstract Message[] store(Message... message);    
 }
