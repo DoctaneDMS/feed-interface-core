@@ -23,6 +23,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
 
 
 /** Feed Service interface.
@@ -234,4 +237,19 @@ public interface FeedService extends AutoCloseable {
     public Optional<Instant> getLastTimestamp(FeedPath path) throws InvalidPath;
     
     public void dumpState(PrintWriter out);
+    
+    public static Instant getInitTime(JsonObject json) {
+        return Instant.parse(json.getString("initTime"));
+    }
+    
+    public static UUID getServerId(JsonObject json) {
+        return UUID.fromString(json.getString("serviceId"));
+    }
+    
+    default JsonObject toJson() {
+        JsonObjectBuilder jsonResult = Json.createObjectBuilder();
+        jsonResult.add("initTime", getInitTime().toString());
+        jsonResult.add("serviceId", getServerId().toString());
+        return jsonResult.build();
+    }
 }
