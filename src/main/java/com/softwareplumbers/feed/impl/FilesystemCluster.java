@@ -14,10 +14,12 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
@@ -118,5 +120,9 @@ public class FilesystemCluster extends AbstractCluster {
     
     public FilesystemCluster(ExecutorService executor, Path clusterStatus, URI localUri, Resolver<Host> clusterResolver) throws IOException {
         super(executor, localUri, clusterResolver, ()->new HostStatusFile(clusterStatus));
+    }
+    
+    public FilesystemCluster(int threadPoolSize, String clusterStatus, URI localUri, Resolver<Host> clusterResolver) throws IOException {
+        super(Executors.newFixedThreadPool(threadPoolSize), localUri, clusterResolver, ()->new HostStatusFile(Paths.get(clusterStatus)));
     }
 }
