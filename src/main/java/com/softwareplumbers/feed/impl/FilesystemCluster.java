@@ -122,7 +122,7 @@ public class FilesystemCluster extends AbstractCluster {
         super(executor, localUri, clusterResolver, ()->new HostStatusFile(clusterStatus));
     }
     
-    public FilesystemCluster(int threadPoolSize, String clusterStatus, URI localUri, Resolver<Host> clusterResolver) throws IOException {
-        super(Executors.newFixedThreadPool(threadPoolSize), localUri, clusterResolver, ()->new HostStatusFile(Paths.get(clusterStatus)));
+    public FilesystemCluster(int threadPoolSize, String clusterStatus, String localUri, Resolver<Host> clusterResolver) throws IOException {
+        super(Executors.newFixedThreadPool(threadPoolSize), URI.create(localUri), clusterResolver, ()->new HostStatusFile(Paths.get(clusterStatus)));
     }
 }
