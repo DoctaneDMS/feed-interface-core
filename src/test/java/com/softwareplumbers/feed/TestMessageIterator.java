@@ -1,3 +1,4 @@
+
 /*
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
@@ -11,6 +12,7 @@ import static com.softwareplumbers.feed.test.TestUtils.randomFeedPath;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.json.JsonValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
@@ -77,6 +80,23 @@ public class TestMessageIterator {
         }
         
         assertFalse(peeked.isPresent());
+    }
+    
+    @Test
+    public void testFilter() {
+        Map<FeedPath,Message> messages1 = generateMessages(3,2,randomFeedPath(),m->m).collect(Collectors.toMap(m->m.getName(), m->m));
+        
+        final long averageLength = messages1.values().stream().map(Message::getLength).reduce(0L, (a,b)->a+b) / messages1.size();
+        
+        MessageIterator filter = MessageIterator.of(messages1.values().iterator(), ()->{}).filter(message->message.getLength() < averageLength);
+        Iterator<Message> reference = messages1.values().stream().filter(message->message.getLength() < averageLength).iterator();
+                
+        while (filter.hasNext() && reference.hasNext()) {
+            assertThat(filter.next(), equalTo(reference.next()));
+        }
+        
+        assertFalse(filter.hasNext());
+        assertFalse(reference.hasNext());
     }
     
     @Test

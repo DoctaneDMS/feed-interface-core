@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -35,6 +36,10 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
     
     public Peekable peekable() {
         return new Peekable(this);
+    }
+    
+    public MessageIterator filter(Predicate<Message> filter) {
+        return new Filtered(this, filter);
     }
     
     /** Release any resources associated with this MessageIterator.
@@ -214,14 +219,18 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
         Message next;
         final MessageIterator base;
         
-        public Peekable(MessageIterator base) {
+        private static Message next(MessageIterator it) {
+            return it.hasNext() ? it.next() : null; 
+        }        
+        
+        protected Peekable(MessageIterator base, Message next) {
             super(base::close);
             this.base = base;
-            if (base.hasNext()) {
-                next = base.next();
-            } else {
-                next = null;
-            }
+            this.next = next;
+        }
+        
+        public Peekable(MessageIterator base) {
+            this(base, next(base));
         }
 
         @Override
@@ -232,7 +241,7 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
         @Override
         public Message next() {
             Message result = next;
-            next = base.hasNext() ? base.next() : null;
+            next = next(base);
             return result;
         }
         
@@ -246,6 +255,44 @@ public abstract class MessageIterator implements AutoCloseable, Iterator<Message
         }
     }
         
+    
+    public static class Filtered extends Peekable {
+        
+        final Predicate<Message> predicate;
+        
+        private static Message nextMatching(Predicate predicate, MessageIterator it) {
+            Message next = null;
+            do next = it.hasNext() ? it.next() : null; while (next != null && !predicate.test(next));
+            return next;
+        }
+        
+        public Filtered(MessageIterator base, Predicate<Message> predicate) {
+            super(base, nextMatching(predicate, base));
+            this.predicate = predicate;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return next != null;
+        }
+
+        @Override
+        public Message next() {
+            Message result = next;
+            next = nextMatching(predicate, base);
+            return result;
+        }
+        
+        public Optional<Message> peek() {
+            return Optional.ofNullable(next);
+        }
+    
+        @Override
+        public Peekable peekable() {
+            return this;
+        }
+    }    
+    
     /** Create a MessageIterator from another iterator, plus a handler to release resources.
      * 
      * @param messages Iterator over messages.
