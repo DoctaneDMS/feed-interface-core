@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import javax.json.Json;
@@ -161,6 +162,11 @@ public interface Feed {
         return object.containsKey("lastTimestamp") 
             ? Optional.of(Instant.parse(object.getString("lastTimestamp"))) 
             : Optional.empty();
+    }
+    
+    public static Stream<Feed> getChildren(JsonObject object, Function<JsonObject,Feed> mapper) {
+        JsonObject children = object.getJsonObject("children");
+        return children.values().stream().map(JsonObject.class::cast).map(mapper);
     }
            
 }
