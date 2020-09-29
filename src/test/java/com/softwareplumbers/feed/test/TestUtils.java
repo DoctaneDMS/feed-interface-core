@@ -56,7 +56,9 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.json.JsonValue;
 
 /**
  *
@@ -286,13 +288,26 @@ public class TestUtils {
         if (b.isPresent()) return -0;
         return 0;
     }
+    
+    public static int compare(JsonObject a, JsonObject b) {
+        TreeSet<String> keys = new TreeSet<>();
+        keys.addAll(a.keySet());
+        keys.addAll(b.keySet());
+        int result = 0;
+        Iterator<String> i = keys.iterator();
+        while (i.hasNext() && result == 0) {
+            String key = i.next();
+            result = a.getOrDefault(key, JsonValue.NULL).toString().compareTo(b.getOrDefault(key, JsonValue.NULL).toString());
+        }
+        return result;
+    }
 
     public static int compare(Message a, Message b) {
         int result = a.getFeedName().compareTo(b.getFeedName());
         if (result != 0) return result;
         result = a.getType().compareTo(b.getType());
         if (result != 0) return result;
-        result = a.getHeaders().toString().compareTo(b.getHeaders().toString());
+        result = compare(a.getHeaders(), b.getHeaders());
         if (result != 0) return result;
         result = asString(a.getData()).compareTo(asString(b.getData()));
         return result;
