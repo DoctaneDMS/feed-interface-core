@@ -292,8 +292,6 @@ public class TestUtils {
         if (result != 0) return result;
         result = a.getType().compareTo(b.getType());
         if (result != 0) return result;
-        result = Comparator.nullsFirst(String::compareTo).compare(a.getSender(), b.getSender());
-        if (result != 0) return result;        
         result = a.getHeaders().toString().compareTo(b.getHeaders().toString());
         if (result != 0) return result;
         result = asString(a.getData()).compareTo(asString(b.getData()));
