@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
 import com.softwareplumbers.feed.FeedExceptions.InvalidState;
 import com.softwareplumbers.feed.test.TestUtils;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -33,8 +35,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Test;
+import static org.mockito.Matchers.notNull;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.env.Environment;
 import org.springframework.test.annotation.DirtiesContext;
@@ -58,7 +62,7 @@ public class TestFeedService {
         try {
             Message ack = service.post(message.getFeedName(), message);
             // This should be the same as the message ultimately received *on the same server as it was posted*
-            return message.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get());
+            return TestUtils.expectedReturn(message, ack);
         } catch (InvalidPath | InvalidState e) {
             throw new RuntimeException(e);
         }
@@ -93,6 +97,61 @@ public class TestFeedService {
         }
         assertThat(count, equalTo(SEND_COUNT));        
     }
+    
+    @Test
+    public void testSearchByMessageId() throws IOException, InvalidPath, InvalidId, InterruptedException {
+        FeedPath path = randomFeedPath();
+        NavigableSet<Message> sentMessages = new TreeSet<>(TestUtils::compare);
+        generateMessages(1, 0, path, this::post).forEach(message->sentMessages.add(message));
+        assertThat(sentMessages.size(), equalTo(1));
+        try (MessageIterator messages = service.search(sentMessages.first().getName(), Filters.NO_ACKS)) {
+            assertTrue(messages.hasNext());
+            assertThat(messages.next(), isIn(sentMessages));
+        }
+    }    
+    
+    @Test
+    public void testServiceInfo() {
+        assertThat(service.getServerId(), notNullValue());
+        assertThat(service.getInitTime(), notNullValue());
+    }   
+
+    @Test
+    public void testGetFeedInfo() throws InvalidPath {
+        FeedPath path = randomFeedPath();
+        Message expectedReturn = post(generateMessage(path));
+        Feed feed = service.getFeed(path);
+        assertThat(feed.getName(), equalTo(path));
+        assertThat(feed.getLastTimestamp().get(), equalTo(expectedReturn.getTimestamp()));
+        assertThat(feed.getLastTimestamp(service).get(), equalTo(expectedReturn.getTimestamp()));
+        assertThat(service.getLastTimestamp(path).get(), equalTo(expectedReturn.getTimestamp()));
+    } 
+
+    @Test
+    public void testGetFeedChildren() throws InvalidPath {
+        FeedPath path = randomFeedPath();
+        FeedPath childA = path.add("a");
+        FeedPath childB = path.add("b");
+        FeedPath grandChild = childA.add("c");
+        
+        post(generateMessage(childA));
+        post(generateMessage(childB));
+        post(generateMessage(grandChild));
+        
+        assertThat(service.getChildren(path).count(), equalTo(2L));
+        assertThat(service.getFeed(path).getChildren(service).count(), equalTo(2L));
+        
+        assertThat(service.getChildren(childA).count(), equalTo(1L));
+        assertThat(service.getFeed(childA).getChildren(service).count(), equalTo(1L));
+
+        assertThat(service.getChildren(childB).count(), equalTo(0L));
+        assertThat(service.getFeed(childB).getChildren(service).count(), equalTo(0L));
+
+        service.getChildren(path).forEach(child->{
+            assertThat(child.getName(), anyOf(equalTo(childA), equalTo(childB)));
+        });
+    } 
+
     
     @Test 
     public void testCancelCallback() throws InvalidPath, InterruptedException {

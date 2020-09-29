@@ -144,6 +144,10 @@ public class TestUtils {
         }
     }
     
+    public static Message expectedReturn(Message sent, Message ack) {
+        return sent.setName(ack.getName()).setTimestamp(ack.getTimestamp()).setServerId(ack.getServerId().get()).setSender(ack.getSender());        
+    }
+    
     public static Stream<Message> generateMessages(int count, int maxPause, FeedPath path, Function<Message, Message> messageConsumer) {
         ArrayList<Message> messages = new ArrayList(count);
         for (int i = 0; i < count; i++) {
