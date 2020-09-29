@@ -145,7 +145,7 @@ public interface Feed {
         if (depth > 0) {
             try {
                 Stream<Feed> children = service.getChildren(getName());
-                children.forEach(child->builder.add(child.getName().part.getName().get(), child.toJson(service, depth-1)));
+                children.forEach(child->childrenBuilder.add(child.getName().part.getName().get(), child.toJson(service, depth-1)));
             } catch (InvalidPath e) {
                 throw FeedExceptions.runtime(e);
             }
