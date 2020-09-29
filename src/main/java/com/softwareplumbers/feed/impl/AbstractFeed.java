@@ -82,6 +82,8 @@ public abstract class AbstractFeed implements Feed {
             timeouts.computeIfAbsent(callback.expiry, key->new LinkedList()).add(callback);
             scheduleTimeout(service, Optional.of(callback.expiry));
         }
+        if (LOG.isTraceEnabled()) LOG.trace("{} timeout buckets", timeouts.size());
+        if (LOG.isTraceEnabled()) LOG.trace("{} callback buckets", callbacks.size());
         LOG.exit();
     }
     
@@ -92,6 +94,7 @@ public abstract class AbstractFeed implements Feed {
                 bucket.remove(callback);
                 return bucket.isEmpty() ? null : bucket;
             });
+        if (LOG.isTraceEnabled()) LOG.trace("{} timeout buckets", timeouts.size());
         LOG.exit();
     }
     
@@ -101,6 +104,7 @@ public abstract class AbstractFeed implements Feed {
             bucket.remove(callback);
             return bucket.isEmpty() ? null : bucket;            
         });
+        if (LOG.isTraceEnabled()) LOG.trace("{} callback buckets", callbacks.size());
         LOG.exit();
     }
 

@@ -87,7 +87,7 @@ public class TestCluster {
     @Test
     public void testMessageRoundtripSingleThread() throws IOException, FeedExceptions.InvalidPath, InterruptedException, TimeoutException {
         FeedPath path = randomFeedPath();
-        Instant start = Instant.now().minusMillis(10);
+        Instant start = nodeB.getLastTimestamp(FeedPath.ROOT).orElseGet(()->nodeB.getInitTime());
         Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
         Feed feedA = nodeA.getFeed(path);
         final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripSingleThread.SEND_COUNT", Integer.class);
@@ -102,7 +102,8 @@ public class TestCluster {
         LOG.entry();
         FeedPath path = randomFeedPath();
         List<FeedPath> listOfPaths = Collections.singletonList(path);
-        Instant start = Instant.now().minusMillis(10);
+        Instant startB = nodeB.getLastTimestamp(FeedPath.ROOT).orElseGet(()->nodeB.getInitTime());
+        Instant startC = nodeC.getLastTimestamp(FeedPath.ROOT).orElseGet(()->nodeC.getInitTime());
         Feed feedA = nodeA.getFeed(path);
         Feed feedB = nodeB.getFeed(path);
         Feed feedC = nodeC.getFeed(path);
@@ -110,8 +111,8 @@ public class TestCluster {
         LOG.info("Creating sender thread");
         CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
         LOG.info("Creating receiver threads");
-        CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT);
-        CompletableFuture<List<Receiver>> responseMessagesC = TestUtils.createReceivers(1, nodeC, listOfPaths, start, SEND_COUNT);
+        CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, startB, SEND_COUNT);
+        CompletableFuture<List<Receiver>> responseMessagesC = TestUtils.createReceivers(1, nodeC, listOfPaths, startC, SEND_COUNT);
         CompletableFuture.allOf(responseMessagesB, responseMessagesC, sentToA).get(getTimeout(), TimeUnit.SECONDS);
         LOG.info("sender/receiver threads complete");
         List<Message> allSent = new ArrayList<>();
@@ -136,7 +137,9 @@ public class TestCluster {
         LOG.entry();
         FeedPath path = randomFeedPath();
         List<FeedPath> listOfPaths = Collections.singletonList(path);
-        Instant start = Instant.now().minusMillis(10);
+        Instant startA = nodeA.getLastTimestamp(FeedPath.ROOT).orElseGet(()->nodeA.getInitTime());
+        Instant startB = nodeB.getLastTimestamp(FeedPath.ROOT).orElseGet(()->nodeB.getInitTime());
+        Instant startC = nodeC.getLastTimestamp(FeedPath.ROOT).orElseGet(()->nodeC.getInitTime());
         Feed feedA = nodeA.getFeed(path);
         Feed feedB = nodeB.getFeed(path);
         final int SEND_COUNT = env.getProperty("test.TestCluster.testMessageRoundtripBidirectional.SEND_COUNT", Integer.class);
@@ -144,9 +147,9 @@ public class TestCluster {
         CompletableFuture<Stream<Message>> sentToA = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeA, feedA, message));
         CompletableFuture<Stream<Message>> sentToB = generateMessages(1, SEND_COUNT, 2, listOfPaths, message->post(nodeB, feedB, message));
         LOG.info("Creating receiver threads");
-        CompletableFuture<List<Receiver>> responseMessagesA = TestUtils.createReceivers(1, nodeA, listOfPaths, start, SEND_COUNT * 2);
-        CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, start, SEND_COUNT * 2);
-        CompletableFuture<List<Receiver>> responseMessagesC = TestUtils.createReceivers(1, nodeC, listOfPaths, start, SEND_COUNT * 2);
+        CompletableFuture<List<Receiver>> responseMessagesA = TestUtils.createReceivers(1, nodeA, listOfPaths, startA, SEND_COUNT * 2);
+        CompletableFuture<List<Receiver>> responseMessagesB = TestUtils.createReceivers(1, nodeB, listOfPaths, startB, SEND_COUNT * 2);
+        CompletableFuture<List<Receiver>> responseMessagesC = TestUtils.createReceivers(1, nodeC, listOfPaths, startC, SEND_COUNT * 2);
         CompletableFuture.allOf(responseMessagesA, responseMessagesB, responseMessagesC, sentToA, sentToB).get(getTimeout(), TimeUnit.SECONDS);
         LOG.info("sender/receiver threads complete");
         ArrayList<Message> allSent = new ArrayList<>();

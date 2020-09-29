@@ -76,8 +76,7 @@ public class TestFeedService {
     @Test
     public void testMessageRoundtripSingleThread() throws IOException, InvalidPath, InterruptedException {
         FeedPath path = randomFeedPath();
-        Instant start = Instant.now();
-        Thread.sleep(10);
+        Instant start = service.getLastTimestamp(path).orElseGet(()->service.getInitTime());
         Set<Message> sentMessages = new TreeSet<>(TestUtils::compare);
         final int SEND_COUNT = env.getProperty("test.TestFeedService.testMessageRoundtripSingleThread.SEND_COUNT", Integer.class);        
         generateMessages(SEND_COUNT, 2, path, this::post).forEach(message->sentMessages.add(message));
@@ -194,7 +193,7 @@ public class TestFeedService {
     @Test
     public void testMessageRoundtripMultipleThreads() throws IOException, InvalidPath, InterruptedException, ExecutionException {
         
-        Instant start = Instant.now();
+        Instant start = service.getLastTimestamp(FeedPath.ROOT).orElseGet(()->service.getInitTime());
 
         final int SEND_COUNT = env.getProperty("test.TestFeedService.testMessageRoundtripMultipleThreads.SEND_COUNT", Integer.class);   
         final int THREADS = 8;
