@@ -7,7 +7,6 @@ package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
-import com.softwareplumbers.feed.Filters.RemotablePredicate.Type;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -26,7 +25,7 @@ import javax.json.JsonObjectBuilder;
  */
 public class Filters {
     
-    public static class RemotablePredicate implements java.util.function.Predicate<Message> {
+    public static class RemotablePredicate implements Predicate<Message> {
         
         public enum Type {
             NO_ACKS,
@@ -63,9 +62,9 @@ public class Filters {
         }
     }
     
-    public static final Predicate<Message> NO_ACKS = new RemotablePredicate(Type.NO_ACKS, message->message.getType() != MessageType.ACK);
-    public static final Predicate<Message> IS_ACK = new RemotablePredicate(Type.IS_ACK, message->message.getType() == MessageType.ACK);
-    public static final Predicate<Message> POSTED_LOCALLY = new RemotablePredicate(Type.POSTED_LOCALLY, message->!message.getRemoteInfo().isPresent());
+    public static final Predicate<Message> NO_ACKS = new RemotablePredicate(RemotablePredicate.Type.NO_ACKS, message->message.getType() != MessageType.ACK);
+    public static final Predicate<Message> IS_ACK = new RemotablePredicate(RemotablePredicate.Type.IS_ACK, message->message.getType() == MessageType.ACK);
+    public static final Predicate<Message> POSTED_LOCALLY = new RemotablePredicate(RemotablePredicate.Type.POSTED_LOCALLY, message->!message.getRemoteInfo().isPresent());
     
     public static class FromRemote extends RemotablePredicate  {
         public final UUID remote;
@@ -97,7 +96,7 @@ public class Filters {
     
     public Filters(FeedService service) { this.service = service; }
 
-    public boolean testRemoteTimestamp(Message message, UUID serverId, Instant from, Optional<Instant> to, Instant initTime) {
+    public static boolean testRemoteTimestamp(FeedService service, Message message, UUID serverId, Instant from, Optional<Instant> to, Instant initTime) {
         Instant timestamp = message.getTimestamp();
         if (message.getRemoteInfo().isPresent()) {
             // it's a message from a remote
@@ -123,7 +122,7 @@ public class Filters {
         return timestamp.isAfter(from) && (!to.isPresent() || !to.get().isBefore(timestamp));
     };      
     
-    public Instant getInitTime(UUID serverId) {
+    public static Instant getInitTime(FeedService service, UUID serverId) {
         return service.getCluster()
                 .orElseThrow(()->new RuntimeException("service must be registered to a cluster to search by a remote timestamp"))    
                 .getService(serverId)
@@ -131,13 +130,13 @@ public class Filters {
                 .getInitTime();
     }
     
-    public class ByRemoteTimestamp extends RemotablePredicate {
+    public static class ByRemoteTimestamp extends RemotablePredicate {
         public final UUID serverId;
         public final Instant from;
         public final Optional<Instant> to;
         
-        public ByRemoteTimestamp(UUID serverId, Instant from, Optional<Instant> to) {
-            super(Type.BY_REMOTE_TIMESTAMP, message->testRemoteTimestamp(message, serverId, from, to, getInitTime(serverId)));
+        public ByRemoteTimestamp(FeedService service, UUID serverId, Instant from, Optional<Instant> to) {
+            super(Type.BY_REMOTE_TIMESTAMP, message->testRemoteTimestamp(service, message, serverId, from, to, getInitTime(service, serverId)));
             this.serverId = serverId;
             this.from = from;
             this.to = to;
@@ -164,7 +163,7 @@ public class Filters {
     }
     
     public Optional<Predicate<Message>> fromJson(JsonObject object) {
-        Type type = Type.valueOf(object.getString("type"));
+        RemotablePredicate.Type type = RemotablePredicate.Type.valueOf(object.getString("type"));
         switch(type) {
             case NO_ACKS: return Optional.of(NO_ACKS);
             case IS_ACK: return Optional.of(IS_ACK);
@@ -172,6 +171,7 @@ public class Filters {
             case FROM_REMOTE: return Optional.of(new FromRemote(UUID.fromString(object.getString("remote"))));
             case BY_REMOTE_TIMESTAMP: 
                 return Optional.of(new ByRemoteTimestamp(
+                    service,
                     UUID.fromString(object.getString("serviceId")),
                     Instant.parse(object.getString("from")),
                     object.containsKey("to") ? Optional.of(Instant.parse(object.getString("to"))) : Optional.empty()
@@ -190,7 +190,7 @@ public class Filters {
     public static Filters using(FeedService service) { return new Filters(service); }
     
     public Predicate<Message> byRemoteTimestamp(UUID serverId, Instant from, Optional<Instant> to) {
-        return new ByRemoteTimestamp(serverId, from, to);
+        return new ByRemoteTimestamp(service, serverId, from, to);
     } 
     
     public static JsonArray toJson(Predicate<Message>[] predicates) {
