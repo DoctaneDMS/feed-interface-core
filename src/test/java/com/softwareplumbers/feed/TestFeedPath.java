@@ -7,6 +7,8 @@ package com.softwareplumbers.feed;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import org.junit.Test;
 
 /**
@@ -19,6 +21,24 @@ public class TestFeedPath {
     public void testSimplePath() {
         FeedPath path = FeedPath.ROOT.add("abc").add("def").addId("123");
         assertThat(FeedPath.valueOf(path.toString()), equalTo(path));
+    }
+    
+    @Test
+    public void testSimplePathWithEscape() {
+        FeedPath path = FeedPath.valueOf("/xyz\\/abc/234");
+        assertThat(path, equalTo(FeedPath.ROOT.add("xyz/abc").add("234")));
+    }    
+
+    @Test
+    public void testSimplePathWithNonStandardEscape() {
+        FeedPath path = FeedPath.valueOf("/xyz+/abc/234",'+');
+        assertThat(path, equalTo(FeedPath.ROOT.add("xyz/abc").add("234")));
+    }    
+    
+    @Test
+    public void testSimplePathWithRootId() {
+        FeedPath path = FeedPath.valueOf("~xyz/abc/234");
+        assertThat(path, equalTo(FeedPath.ROOT.addId("xyz").add("abc").add("234")));
     }
     
     @Test

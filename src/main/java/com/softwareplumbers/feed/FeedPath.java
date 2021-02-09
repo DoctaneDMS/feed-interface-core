@@ -6,6 +6,8 @@
 package com.softwareplumbers.feed;
 
 import com.softwareplumbers.common.immutablelist.AbstractImmutableList;
+import com.softwareplumbers.common.abstractpattern.parsers.Tokenizer;
+import com.softwareplumbers.common.abstractpattern.parsers.Token;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -33,6 +35,31 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         return 0;
     };
     
+    private static final String[] FEED_PATH_OPERATORS = {"/", "@", "~"};
+    
+    private static final char DEFAULT_ESCAPE = '\\';        
+    
+    protected static String escape(final String toEscape, final int escape) {
+        final StringBuilder builder = new StringBuilder();
+        final String escapeString = Character.toString((char)escape);
+        final String[] operators = Stream.concat(Stream.of(FEED_PATH_OPERATORS), Stream.of(escapeString)).toArray(String[]::new);
+        Tokenizer tokenizer = new Tokenizer(toEscape, operators);
+       
+        while (tokenizer.hasNext()) { 
+            Token token = tokenizer.next();
+            if (token.type == Token.Type.OPERATOR) builder.append(escapeString);
+            builder.append(token.data);
+        }
+        
+        return builder.toString();
+    }            
+           
+    public static class InvalidFeedPath extends RuntimeException {
+        public InvalidFeedPath(String reason, String status) {
+            super(reason + " at " + status);                    
+        }
+    }    
+            
     /** Represents an element in a feed path.
      * 
      */
@@ -59,6 +86,12 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         public Element(Type type) { this.type = type; }
         @Override
         public boolean equals(Object other) { return other instanceof Element && 0 == compareTo((Element)other); }
+        
+        public abstract String toString(char escape);
+        
+        public String toString() {
+            return toString(DEFAULT_ESCAPE);
+        }
     }
     
     private static class Feed extends Element {
@@ -90,20 +123,14 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         }
         
         @Override
-        public String toString() {
-            return escape(name) + (version.isPresent() ? "@" + escape(version.get()) : "");
+        public String toString(char escape) {
+            return escape(name, escape) + (version.isPresent() ? "@" + escape(version.get(), escape) : "");
         }
         
         @Override
         public int hashCode() { return type.hashCode() ^ name.hashCode() ^ version.hashCode(); }  
         
-        public static Optional<Feed> valueOf(String item) {
-            String[] parts = split(item, "@").toArray(String[]::new);
-            if (parts.length > 1)
-                return Optional.of(new Feed(unescape(parts[0]), Optional.of(unescape(parts[1]))));
-            else
-                return Optional.of(new Feed(unescape(parts[0]), Optional.empty()));
-        }
+
     }
     
     private static class Id extends Element {
@@ -128,8 +155,8 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         }        
         
         @Override
-        public String toString() {
-            return "~" + escape(id);
+        public String toString(char escape) {
+            return "~" + escape(id, escape);
         }
         
         @Override
@@ -141,12 +168,6 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
     
         public MessageId(String id) {
             super(Element.Type.MESSAGEID, id);
-        }
-    
-        public static Optional<Id> valueOf(String item) {
-            if (item.startsWith("~") && !item.startsWith("~~")) 
-                return Optional.of(new MessageId(unescape(item.substring(1))));
-            return Optional.empty();
         }
     }
   
@@ -186,33 +207,20 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         }
     }
     
-    public String join(String separator) {
-        return join(Element::toString, separator);
+    public String join(String separator, char escape) {
+        return join(e->e.toString(escape), separator);
     }
-    
-    private static String escape(String item) {
-        return escape(item, "/", DEFAULT_ESCAPE);
-    }
-    
-    private static final String unescape(String escaped) {
-        String regexEscape = "\\\\";
-        String escape = "\\";
-        return escaped
-            .replaceAll("(?<!"+ regexEscape +")" + regexEscape, "")
-            .replaceAll(regexEscape + regexEscape, escape);
-    }
-    
- 	private static Stream<String> split(String toParse, String separator) {
-        String regexEscape = "\\\\";
-        String escape = "\\";
-        String [] splits = toParse.split("(?<!"+ regexEscape +")" + separator);
-        return Stream.of(splits);
-	}    
+ 
     
     @Override
     public String toString() {
-        return join("/");
+        return toString(DEFAULT_ESCAPE);
     }
+    
+    public String toString(char escape) {
+        return join("/", escape);
+    }
+    
 
     private FeedPath beforeMessageIdOrEmpty() {
         if (isEmpty()) return ROOT;
@@ -228,6 +236,90 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
         return fp.isEmpty() ? this : fp; 
     }
     
+    private static String parseVersion(Tokenizer tokenizer) {
+        Token token = tokenizer.current();
+        if (token.type == Token.Type.CHAR_SEQUENCE) {
+            String version = tokenizer.current().data.toString();
+            tokenizer.next();
+            return version;
+        } else {
+            throw new InvalidFeedPath("Unexpected character " + token.data, tokenizer.getStatus());            
+        }        
+    }
+    
+    private static Feed parseName(Tokenizer tokenizer) {
+        Token token = tokenizer.current();
+        if (token.type == Token.Type.CHAR_SEQUENCE) {
+            String name = tokenizer.current().data.toString();
+            Optional<String> version = Optional.empty();
+            tokenizer.next();
+            if (tokenizer.hasNext()) {
+                token = tokenizer.current();        
+                if (token.type == Token.Type.OPERATOR) {
+                    if ("@".contentEquals(token.data)) {
+                        tokenizer.next();
+                        version = Optional.of(parseVersion(tokenizer));
+                    }
+                }
+            }
+            return new Feed(name, version);
+        } else {
+            throw new InvalidFeedPath("Unexpected character " + token.data, tokenizer.getStatus());            
+        }
+    }    
+    
+    private static Element parseId(Tokenizer tokenizer) {
+        Token token = tokenizer.current();
+        if (token.type == Token.Type.OPERATOR) {
+            throw new InvalidFeedPath("Unexpected character " + token.data, tokenizer.getStatus());
+        } else {
+            CharSequence id = token.data;
+            tokenizer.next();
+            return new MessageId(id.toString());
+        }
+    }    
+    
+    private static Element parsePathElement(Tokenizer tokenizer) {
+        Token token = tokenizer.current();
+        if (token.type == Token.Type.OPERATOR) {
+            if ("~".contentEquals(token.data)) {
+                tokenizer.next();
+                return parseId(tokenizer);
+            } else {
+                throw new InvalidFeedPath("Unexpected symbol " + token.data, tokenizer.getStatus());
+            }
+        } else {
+            return parseName(tokenizer);
+        }
+    }
+        
+    private static FeedPath parsePath(Tokenizer tokenizer) {
+        FeedPath result = FeedPath.ROOT;
+        while (tokenizer.hasNext()) {
+            Token token = tokenizer.current();
+            if (token.type == Token.Type.OPERATOR) {
+                if ("/".contentEquals(token.data)) {
+                    tokenizer.next();                    
+                    continue;
+                } else if ("@".contentEquals(token.data)) {
+                    throw new InvalidFeedPath("Unexpected symbol `@`", tokenizer.getStatus());
+                }
+                // other operators must be part of the path element
+            }
+            result = result.add(parsePathElement(tokenizer));
+        } 
+        return result;
+    }
+    
+    public static FeedPath valueOf(String path, char escape) {
+        FeedPath result = ROOT;
+        
+        Tokenizer tokenizer = new Tokenizer(path, escape, FEED_PATH_OPERATORS);
+        
+        return parsePath(tokenizer);
+    }
+        
+    
     /** Convert a string into a feed path.
      * 
      * Paths are of the form ~feedid/feed/feed/~messageid where
@@ -237,19 +329,6 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
      * @return The feed path.
      */
     public static FeedPath valueOf(String path) {
-        FeedPath result = ROOT;
-        Iterable<String> elements = split(path, "/")::iterator;
-        for (String pathElement : elements) {
-            if (pathElement.length() == 0) continue;  
-            Optional<Id> id = MessageId.valueOf(pathElement);
-            if (id.isPresent()) {
-                result = result.add(id.get());
-            } else {
-                result = result.add(Feed.valueOf(pathElement)
-                    .orElseThrow(()->new RuntimeException("cannot parse: " + pathElement))
-                );
-            }
-        }
-        return result;
+        return valueOf(path, DEFAULT_ESCAPE);
     }
 }
