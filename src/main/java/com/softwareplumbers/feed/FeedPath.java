@@ -203,7 +203,7 @@ public class FeedPath extends AbstractImmutableList<FeedPath.Element, FeedPath> 
     }
     
     public String join(String separator, char escape) {
-        return (parent.isEmpty() ? "" : parent.toString(escape)) + separator + part.toString(escape);
+        return isEmpty() ? "" : parent.toString(escape) + separator + part.toString(escape);
     }
  
     
