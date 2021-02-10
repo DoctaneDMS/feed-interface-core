@@ -28,6 +28,7 @@ public class TestFeedPath {
     public void testSimplePathWithEscape() throws InvalidPathSyntax {
         FeedPath path = FeedPath.valueOf("/xyz\\/abc/234");
         assertThat(path, equalTo(FeedPath.ROOT.add("xyz/abc").add("234")));
+        assertThat(path.toString(), equalTo("/xyz\\/abc/234"));
     }    
 
     @Test

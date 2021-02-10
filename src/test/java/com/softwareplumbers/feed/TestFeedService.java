@@ -110,6 +110,18 @@ public class TestFeedService {
     }    
     
     @Test
+    public void testSearchByMessageIdWithUnsafePath() throws IOException, InvalidPath, InvalidId, InterruptedException {
+        FeedPath path = unsafeFeedPath();
+        NavigableSet<Message> sentMessages = new TreeSet<>(TestUtils::compare);
+        generateMessages(1, 0, path, this::post).forEach(message->sentMessages.add(message));
+        assertThat(sentMessages.size(), equalTo(1));
+        try (MessageIterator messages = service.search(sentMessages.first().getName(), Filters.NO_ACKS)) {
+            assertTrue(messages.hasNext());
+            assertThat(messages.next(), isIn(sentMessages));
+        }
+    }     
+    
+    @Test
     public void testServiceInfo() {
         assertThat(service.getServerId(), notNullValue());
         assertThat(service.getInitTime(), notNullValue());
@@ -125,6 +137,17 @@ public class TestFeedService {
         assertThat(feed.getLastTimestamp(service).get(), equalTo(expectedReturn.getTimestamp()));
         assertThat(service.getLastTimestamp(path).get(), equalTo(expectedReturn.getTimestamp()));
     } 
+    
+    @Test
+    public void testGetFeedInfoWithUnsafePath() throws InvalidPath {
+        FeedPath path = unsafeFeedPath();
+        Message expectedReturn = post(generateMessage(path));
+        Feed feed = service.getFeed(path);
+        assertThat(feed.getName(), equalTo(path));
+        assertThat(feed.getLastTimestamp().get(), equalTo(expectedReturn.getTimestamp()));
+        assertThat(feed.getLastTimestamp(service).get(), equalTo(expectedReturn.getTimestamp()));
+        assertThat(service.getLastTimestamp(path).get(), equalTo(expectedReturn.getTimestamp()));
+    }     
 
     @Test
     public void testGetFeedChildren() throws InvalidPath {
@@ -150,6 +173,31 @@ public class TestFeedService {
             assertThat(child.getName(), anyOf(equalTo(childA), equalTo(childB)));
         });
     } 
+    
+    @Test
+    public void testGetFeedChildrenWithUnsafePath() throws InvalidPath {
+        FeedPath path = unsafeFeedPath();
+        FeedPath childA = path.add("a");
+        FeedPath childB = path.add("b");
+        FeedPath grandChild = childA.add("c");
+        
+        post(generateMessage(childA));
+        post(generateMessage(childB));
+        post(generateMessage(grandChild));
+        
+        assertThat(service.getChildren(path).count(), equalTo(2L));
+        assertThat(service.getFeed(path).getChildren(service).count(), equalTo(2L));
+        
+        assertThat(service.getChildren(childA).count(), equalTo(1L));
+        assertThat(service.getFeed(childA).getChildren(service).count(), equalTo(1L));
+
+        assertThat(service.getChildren(childB).count(), equalTo(0L));
+        assertThat(service.getFeed(childB).getChildren(service).count(), equalTo(0L));
+
+        service.getChildren(path).forEach(child->{
+            assertThat(child.getName(), anyOf(equalTo(childA), equalTo(childB)));
+        });
+    }     
 
     
     @Test 

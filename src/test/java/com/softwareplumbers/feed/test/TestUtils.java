@@ -102,6 +102,10 @@ public class TestUtils {
         return FEEDS[(int)(Math.random() * FEEDS.length)];
     }
     
+    public static FeedPath unsafeFeedPath() {
+        return FeedPath.ROOT.add("mar~keting[a]/stipend").add("p@ker");
+    }
+    
     public static String randomId() {
         return UUID.randomUUID().toString();
     }
