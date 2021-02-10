@@ -82,10 +82,10 @@ public class TestUtils {
     private static final String[] WORDS = new String[] { "sphagetti", "idle", "loves", "jane", "dog", "hair", "tantric", "slightly", "worm", "likely", "moves", "gets", "fast" };
     
     private static final FeedPath[] FEEDS = new FeedPath[] {
-        FeedPath.valueOf("accounts/teamA/baseball"),
-        FeedPath.valueOf("accounts/teamA/audit"),
-        FeedPath.valueOf("marketing/poker"),
-        FeedPath.valueOf("sales/ringthebell")  
+        FeedPath.ROOT.add("accounts").add("teamA").add("baseball"),
+        FeedPath.ROOT.add("accounts").add("teamA").add("audit"),
+        FeedPath.ROOT.add("marketing").add("poker"),
+        FeedPath.ROOT.add("sales").add("ringthebell")
     };
     
     private static String randomText(int count) {

@@ -6,6 +6,7 @@
 package com.softwareplumbers.feed;
 
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
+import com.softwareplumbers.feed.FeedExceptions.InvalidPathSyntax;
 import com.softwareplumbers.feed.FeedExceptions.StreamingException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -118,7 +119,11 @@ public interface Message {
 
     public static Optional<FeedPath> getName(JsonObject obj) {
         if (obj.containsKey("name")) {
-            return Optional.of(FeedPath.valueOf(obj.getString("name")));
+            try {
+                return Optional.of(FeedPath.valueOf(obj.getString("name")));
+            } catch (InvalidPathSyntax e) {
+                throw FeedExceptions.runtime(e);
+            }
         } else {
             return Optional.empty();
         }

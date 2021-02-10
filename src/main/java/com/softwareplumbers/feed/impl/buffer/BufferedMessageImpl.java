@@ -8,7 +8,9 @@ package com.softwareplumbers.feed.impl.buffer;
 import com.softwareplumbers.common.pipedstream.InputStreamSupplier;
 import com.softwareplumbers.common.pipedstream.OutputStreamConsumer;
 import com.softwareplumbers.feed.FeedExceptions;
+import com.softwareplumbers.feed.FeedExceptions.InvalidPathSyntax;
 import com.softwareplumbers.feed.FeedExceptions.StreamingException;
+import static com.softwareplumbers.feed.FeedExceptions.runtime;
 import com.softwareplumbers.feed.FeedPath;
 import com.softwareplumbers.feed.Message;
 import com.softwareplumbers.feed.MessageType;
@@ -43,7 +45,11 @@ public class BufferedMessageImpl implements Message {
         public Headers(JsonObject allHeaders) {
             this.length = allHeaders.getJsonNumber("length").longValueExact();
             this.headers = allHeaders.getJsonObject("headers");
-            this.name = FeedPath.valueOf(allHeaders.getString("name"));
+            try {
+                this.name = FeedPath.valueOf(allHeaders.getString("name"));
+            } catch (InvalidPathSyntax e) {
+                throw runtime(e);
+            }
             this.timestamp = Message.getTimestamp(allHeaders).orElse(null);
             this.serverId = Message.getServerId(allHeaders).orElseThrow(()->new RuntimeException("serverId is mandatory"));
             this.sender = Message.getSender(allHeaders).orElse(null);

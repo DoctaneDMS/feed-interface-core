@@ -7,6 +7,8 @@ package com.softwareplumbers.feed;
 
 import com.softwareplumbers.feed.FeedExceptions.InvalidId;
 import com.softwareplumbers.feed.FeedExceptions.InvalidPath;
+import com.softwareplumbers.feed.FeedExceptions.InvalidPathSyntax;
+import static com.softwareplumbers.feed.FeedExceptions.runtime;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
@@ -155,7 +157,11 @@ public interface Feed {
     }
     
     public static FeedPath getName(JsonObject object) {
-        return FeedPath.valueOf(object.getString("name"));
+        try {
+            return FeedPath.valueOf(object.getString("name"));
+        } catch (InvalidPathSyntax e) {
+            throw runtime(e);
+        }
     }
     
     public static Optional<Instant> getLastTimestamp(JsonObject object) {

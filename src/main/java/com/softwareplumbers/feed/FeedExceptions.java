@@ -16,6 +16,7 @@ public class FeedExceptions {
     
     public static enum Type {
         INVALID_PATH,
+        INVALID_PATH_SYNTAX,
         INVALID_JSON,
         INVALID_ID,
         INVALID_STATE,
@@ -185,6 +186,32 @@ public class FeedExceptions {
             return super.buildJson(bldr).add("path", path.toString());
         }
     }
+    
+    /** Throw if a path is invalid
+     * 
+     */
+    public static class InvalidPathSyntax extends BaseException {
+        public final String reason;
+        public final String status;
+        public InvalidPathSyntax(String reason, String status) {
+            super(Type.INVALID_PATH_SYNTAX, "Invalid Path: " + reason + " at " + status);
+            this.reason = reason;
+            this.status = status;
+        }
+        public static Optional<String> getReason(JsonObject object) {
+            try {
+                return Optional.of(object.getString("reason"));
+            } catch (Exception e) {
+                return Optional.empty();
+            }
+        }
+        @Override
+        public JsonObjectBuilder buildJson(JsonObjectBuilder bldr) {
+            return super.buildJson(bldr)
+                .add("reason", reason)
+                .add("status", status);
+        }
+    }    
     
     /** Throw if an id is invalid
      * 

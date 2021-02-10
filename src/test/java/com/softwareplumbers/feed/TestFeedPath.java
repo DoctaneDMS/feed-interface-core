@@ -5,6 +5,7 @@
  */
 package com.softwareplumbers.feed;
 
+import com.softwareplumbers.feed.FeedExceptions.InvalidPathSyntax;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertEquals;
@@ -18,25 +19,25 @@ import org.junit.Test;
 public class TestFeedPath {
     
     @Test
-    public void testSimplePath() {
+    public void testSimplePath() throws InvalidPathSyntax {
         FeedPath path = FeedPath.ROOT.add("abc").add("def").addId("123");
         assertThat(FeedPath.valueOf(path.toString()), equalTo(path));
     }
     
     @Test
-    public void testSimplePathWithEscape() {
+    public void testSimplePathWithEscape() throws InvalidPathSyntax {
         FeedPath path = FeedPath.valueOf("/xyz\\/abc/234");
         assertThat(path, equalTo(FeedPath.ROOT.add("xyz/abc").add("234")));
     }    
 
     @Test
-    public void testSimplePathWithNonStandardEscape() {
+    public void testSimplePathWithNonStandardEscape() throws InvalidPathSyntax {
         FeedPath path = FeedPath.valueOf("/xyz+/abc/234",'+');
         assertThat(path, equalTo(FeedPath.ROOT.add("xyz/abc").add("234")));
     }    
     
     @Test
-    public void testSimplePathWithRootId() {
+    public void testSimplePathWithRootId() throws InvalidPathSyntax {
         FeedPath path = FeedPath.valueOf("~xyz/abc/234");
         assertThat(path, equalTo(FeedPath.ROOT.addId("xyz").add("abc").add("234")));
     }
